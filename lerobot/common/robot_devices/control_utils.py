@@ -29,6 +29,9 @@ import torch
 from deepdiff import DeepDiff
 from termcolor import colored
 
+import numpy as np
+import math
+
 from lerobot.common.datasets.image_writer import safe_stop_image_writer
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.common.datasets.utils import get_features_from_robot
@@ -197,6 +200,8 @@ def record_episode(
     policy,
     fps,
     single_task,
+    clicked_coords=None,
+    angle=None,
 ):
     control_loop(
         robot=robot,
@@ -208,8 +213,30 @@ def record_episode(
         fps=fps,
         teleoperate=policy is None,
         single_task=single_task,
+        clicked_coords=clicked_coords,
+        angle=angle
     )
 
+def put_the_marker(image: np.ndarray, coords: tuple, radius=10,
+                   border_color=(0, 0, 255), cross_color=(0, 0, 255),
+                   bg_color=(255, 255, 255),angle=0):
+    """
+    Draw a marker on the given image at the specified `coords`.
+    """
+    if coords is None:
+        return image
+
+    x, y = coords
+    center = (x,y)
+            
+    cv2.circle(image, center, radius, bg_color, -1)
+    cv2.circle(image, center, radius, border_color, 2)
+    cv2.line(image, center, (x-int(math.sin(math.radians(angle))*radius), y+int(math.cos(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x-int(math.cos(math.radians(angle))*radius), y-int(math.sin(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x+int(math.sin(math.radians(angle))*radius), y-int(math.cos(math.radians(angle))*radius)), cross_color, 2)
+    cv2.arrowedLine(image, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), (x+int(math.cos(math.radians(angle))*25),y+int(math.sin(math.radians(angle))*25)), cross_color, 4, tipLength=0.75)
+    return image
 
 @safe_stop_image_writer
 def control_loop(
@@ -217,11 +244,13 @@ def control_loop(
     control_time_s=None,
     teleoperate=False,
     display_cameras=False,
-    dataset: LeRobotDataset | None = None,
+    dataset = None,
     events=None,
     policy: PreTrainedPolicy = None,
     fps: int | None = None,
     single_task: str | None = None,
+    clicked_coords=None,
+    angle=None
 ):
     # TODO(rcadene): Add option to record logs
     if not robot.is_connected:
@@ -268,6 +297,11 @@ def control_loop(
         if display_cameras and not is_headless():
             image_keys = [key for key in observation if "image" in key]
             for key in image_keys:
+                if clicked_coords is not None and "phone" in key:
+                    img_bgr = cv2.cvtColor(observation[key].numpy(), cv2.COLOR_RGB2BGR)
+                    put_the_marker(img_bgr, coords=clicked_coords,angle=angle)
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    observation[key] = torch.from_numpy(img_rgb)
                 cv2.imshow(key, cv2.cvtColor(observation[key].numpy(), cv2.COLOR_RGB2BGR))
             cv2.waitKey(1)
 
