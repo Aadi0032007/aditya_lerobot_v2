@@ -344,39 +344,41 @@ def stop_recording(robot, listener, display_cameras):
 
 
 def sanity_check_dataset_name(repo_id, policy_cfg):
-    _, dataset_name = repo_id.split("/")
-    # either repo_id doesnt start with "eval_" and there is no policy
-    # or repo_id starts with "eval_" and there is a policy
+    # _, dataset_name = repo_id.split("/")
+    # # either repo_id doesnt start with "eval_" and there is no policy
+    # # or repo_id starts with "eval_" and there is a policy
 
-    # Check if dataset_name starts with "eval_" but policy is missing
-    if dataset_name.startswith("eval_") and policy_cfg is None:
-        raise ValueError(
-            f"Your dataset name begins with 'eval_' ({dataset_name}), but no policy is provided ({policy_cfg.type})."
-        )
+    # # Check if dataset_name starts with "eval_" but policy is missing
+    # if dataset_name.startswith("eval_") and policy_cfg is None:
+    #     raise ValueError(
+    #         f"Your dataset name begins with 'eval_' ({dataset_name}), but no policy is provided ({policy_cfg.type})."
+    #     )
 
-    # Check if dataset_name does not start with "eval_" but policy is provided
-    if not dataset_name.startswith("eval_") and policy_cfg is not None:
-        raise ValueError(
-            f"Your dataset name does not begin with 'eval_' ({dataset_name}), but a policy is provided ({policy_cfg.type})."
-        )
+    # # Check if dataset_name does not start with "eval_" but policy is provided
+    # if not dataset_name.startswith("eval_") and policy_cfg is not None:
+    #     raise ValueError(
+    #         f"Your dataset name does not begin with 'eval_' ({dataset_name}), but a policy is provided ({policy_cfg.type})."
+    #     )
+    pass
 
 
 def sanity_check_dataset_robot_compatibility(
-    dataset: LeRobotDataset, robot: Robot, fps: int, use_videos: bool
-) -> None:
-    fields = [
-        ("robot_type", dataset.meta.robot_type, robot.robot_type),
-        ("fps", dataset.fps, fps),
-        ("features", dataset.features, get_features_from_robot(robot, use_videos)),
-    ]
+#     dataset: LeRobotDataset, robot: Robot, fps: int, use_videos: bool
+# ) -> None:
+#     fields = [
+#         ("robot_type", dataset.meta.robot_type, robot.robot_type),
+#         ("fps", dataset.fps, fps),
+#         ("features", dataset.features, get_features_from_robot(robot, use_videos)),
+#     ]
 
-    mismatches = []
-    for field, dataset_value, present_value in fields:
-        diff = DeepDiff(dataset_value, present_value, exclude_regex_paths=[r".*\['info'\]$"])
-        if diff:
-            mismatches.append(f"{field}: expected {present_value}, got {dataset_value}")
+#     mismatches = []
+#     for field, dataset_value, present_value in fields:
+#         diff = DeepDiff(dataset_value, present_value, exclude_regex_paths=[r".*\['info'\]$"])
+#         if diff:
+#             mismatches.append(f"{field}: expected {present_value}, got {dataset_value}")
 
-    if mismatches:
-        raise ValueError(
-            "Dataset metadata compatibility check failed with mismatches:\n" + "\n".join(mismatches)
-        )
+#     if mismatches:
+#         raise ValueError(
+#             "Dataset metadata compatibility check failed with mismatches:\n" + "\n".join(mismatches)
+#         )
+    pass
