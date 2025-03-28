@@ -165,6 +165,95 @@ from lerobot.common.robot_devices.robots.utils import Robot, make_robot_from_con
 from lerobot.common.robot_devices.utils import busy_wait, safe_disconnect
 from lerobot.common.utils.utils import has_method, init_logging, log_say
 from lerobot.configs import parser
+from pynput.keyboard import Key, Listener
+import numpy as np
+import cv2
+import math
+
+################################################################################
+# Utility Functions
+################################################################################
+angle= 0
+
+def update_angle(key):
+    global angle
+
+    if key == Key.up:
+        angle -= 2
+    elif key == Key.down:
+        angle += 2
+listener_angle = Listener(on_press=update_angle)
+listener_angle.start()
+        
+def put_the_marker(image: np.ndarray, coords: tuple, radius=10,
+                   border_color=(0, 0, 255), cross_color=(0, 0, 255),
+                   bg_color=(255, 255, 255)):
+    """
+    Draw a marker on the given image at the specified `coords`.
+    """
+    if coords is None:
+        return image
+
+    global angle
+    x, y = coords
+    center = (x,y)
+            
+    cv2.circle(image, center, radius, bg_color, -1)
+    cv2.circle(image, center, radius, border_color, 2)
+    cv2.line(image, center, (x-int(math.sin(math.radians(angle))*radius), y+int(math.cos(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x-int(math.cos(math.radians(angle))*radius), y-int(math.sin(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x+int(math.sin(math.radians(angle))*radius), y-int(math.cos(math.radians(angle))*radius)), cross_color, 2)
+    cv2.arrowedLine(image, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), (x+int(math.cos(math.radians(angle))*25),y+int(math.sin(math.radians(angle))*25)), cross_color, 4, tipLength=0.75)
+    return image
+
+def on_mouse_double_click(event, x, y, flags, param):
+    """
+    Mouse callback that captures the (x, y) on double-click.
+    Only updates clicked_coords if manual detection is active.
+    """
+    global clicked_coords, use_manual_detection
+    if use_manual_detection and event == cv2.EVENT_LBUTTONDBLCLK:
+        clicked_coords = (x, y)
+        print(f"[Manual Detection] Double-click at: {clicked_coords}")
+
+def detect_target_coords(robot,events):
+    """
+    Starts the camera feed, allows manual detection via double-click,
+    and returns the selected coordinate after ENTER is pressed.
+    """
+    cv2.destroyAllWindows()
+    global clicked_coords, use_manual_detection,angle
+    clicked_coords = None
+    use_manual_detection = True  # Ensure manual detection is active
+    
+    if events is None:
+        events = {"exit_early": False}
+
+    cv2.namedWindow("phone", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("phone", 640, 480)
+    cv2.setMouseCallback("phone", on_mouse_double_click)
+
+    print("[Detection] Double-click to select a point. Press ENTER to confirm selection.")
+
+    while True:
+        frame = robot.cameras["phone"].async_read()
+        if frame is not None:
+            img_buffer["phone"] = frame.copy()
+            display_frame = cv2.cvtColor(img_buffer["phone"], cv2.COLOR_RGB2BGR)
+            if clicked_coords is not None:
+                put_the_marker(display_frame, clicked_coords)
+            cv2.imshow("phone", display_frame)
+
+        key = cv2.waitKey(1) & 0xFF
+        if events["exit_early"]:
+            events["exit_early"] = False
+            print(f"[Detection] ENTER pressed. Final selected point: {clicked_coords}")
+            break
+
+    cv2.destroyAllWindows()
+    return clicked_coords
+
 
 ########################################################################################
 # Control modes
