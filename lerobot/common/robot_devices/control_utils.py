@@ -281,6 +281,14 @@ def control_loop(
         else:
             observation = robot.capture_observation()
 
+        for name in observation:
+            if "image" in name:
+                if clicked_coords is not None and "phone" in name:
+                    img_bgr = cv2.cvtColor(observation[name].numpy(), cv2.COLOR_RGB2BGR)
+                    put_the_marker(img_bgr, clicked_coords)
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    observation[name] = torch.from_numpy(img_rgb)
+
             if policy is not None:
                 pred_action = predict_action(
                     observation, policy, get_safe_torch_device(policy.config.device), policy.config.use_amp
