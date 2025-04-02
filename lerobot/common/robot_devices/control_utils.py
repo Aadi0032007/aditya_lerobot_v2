@@ -244,7 +244,7 @@ def control_loop(
     control_time_s=None,
     teleoperate=False,
     display_cameras=False,
-    dataset = None,
+    dataset: LeRobotDataset | None = None,
     events=None,
     policy: PreTrainedPolicy = None,
     fps: int | None = None,
