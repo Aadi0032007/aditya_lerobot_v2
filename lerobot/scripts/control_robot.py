@@ -146,6 +146,7 @@ from lerobot.common.robot_devices.control_configs import (
     CalibrateControlConfig,
     ControlPipelineConfig,
     RecordControlConfig,
+    RecordWithMarkerConfig,
     RemoteRobotConfig,
     ReplayControlConfig,
     TeleoperateControlConfig,
