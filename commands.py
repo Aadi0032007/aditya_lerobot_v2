@@ -6,37 +6,40 @@ Created on Tue Nov 19 01:34:41 2024
 @author: aadi
 """
 """
-python lerobot/scripts/control_robot.py record \
-  --robot-path lerobot/configs/robot/koch.yaml \
-  --fps 30 \
-  --num-episodes 10 \
-  -p "/home/revolabs/aditya/aditya_lerobot/outputs/train/act_koch_reach_the_object/checkpoints/last/pretrained_model"
+python lerobot/scripts/control_robot.py \
+  --robot.type=koch \
+  --control.type=record \
+  --control.fps=30 \
+  --control.num_episodes=10 \
+  --control.policy.path=home/revolabs/aditya/aditya_lerobot/outputs/train/act_koch_reach_the_object/checkpoints/last/pretrained_model
   
   
-  python lerobot/scripts/control_robot.py record \
-     --robot-path lerobot/configs/robot/koch.yaml \
-     --fps 30 \
-     --root data \
-     --repo-id ${HF_USER}/eval_koch_reach_the_object \
-     --tags tutorial eval \
-     --warmup-time-s 5 \
-     --episode-time-s 10 \
-     --reset-time-s 30 \
-     --num-episodes 1 \
-     -p "/home/revolabs/aditya/aditya_lerobot/outputs/train/act_koch_reach_the_object/checkpoints/last/pretrained_model"
+  python lerobot/scripts/control_robot.py \
+     --robot.type=koch \
+     --control.type=record \
+     --control.fps=30 \
+     --control.root=data \
+     --control.repo_id=${HF_USER}/eval_koch_reach_the_object \
+     --control.tags='["tutorial", "eval"]' \
+     --control.warmup_time_s=5 \
+     --control.episode_time_s=10 \
+     --control.reset_time_s=30 \
+     --control.num_episodes=1 \
+     --control.policy.path=home/revolabs/aditya/aditya_lerobot/outputs/train/act_koch_reach_the_object/checkpoints/last/pretrained_model
  
  
- python lerobot/scripts/control_robot.py record \
-  --robot-path lerobot/configs/robot/revobots.yaml \
-  --fps 30 \
-  --root data \
-  --repo-id ${HF_USER}/koch_test \
-  --tags tutorial \
-  --warmup-time-s 10 \
-  --episode-time-s 30 \
-  --reset-time-s 30 \
-  --num-episodes 2 \
-  --push-to-hub 0
+ python lerobot/scripts/control_robot.py \
+  --robot.type=revobot \
+  --control.type=record_with_marker \
+  --control.fps=30 \
+  --control.root=data \
+  --control.repo_id=${HF_USER}/koch_test \
+  --control.tags='["tutorial"]' \
+  --control.warmup_time_s=10 \
+  --control.episode_time_s=30 \
+  --control.reset_time_s=30 \
+  --control.num_episodes=2 \
+  --control.push_to_hub=false
   
   
   python lerobot/scripts/train.py \
@@ -50,5 +53,6 @@ python lerobot/scripts/control_robot.py record \
   python lerobot/scripts/control_robot.py teleoperate \
   --robot-path lerobot/configs/robot/koch.yaml
 
-python lerobot/scripts/control_robot.py replay     --fps 30     --root data     --repo-id koch_big_robot     --episode 1 --robot-path lerobot/configs/robot/revobots.yaml
+python lerobot/scripts/control_robot.py --control.type=replay --robot.type=revobot --control.fps=30 --control.root=data --control.repo_id=koch_big_robot --control.episode=1 
+
 """
