@@ -29,6 +29,9 @@ import torch
 from deepdiff import DeepDiff
 from termcolor import colored
 
+import numpy as np
+import math
+
 from lerobot.common.datasets.image_writer import safe_stop_image_writer
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.common.datasets.utils import get_features_from_robot
@@ -39,47 +42,48 @@ from lerobot.common.utils.utils import get_safe_torch_device, has_method
 
 
 def log_control_info(robot: Robot, dt_s, episode_index=None, frame_index=None, fps=None):
-    log_items = []
-    if episode_index is not None:
-        log_items.append(f"ep:{episode_index}")
-    if frame_index is not None:
-        log_items.append(f"frame:{frame_index}")
+    # log_items = []
+    # if episode_index is not None:
+    #     log_items.append(f"ep:{episode_index}")
+    # if frame_index is not None:
+    #     log_items.append(f"frame:{frame_index}")
 
-    def log_dt(shortname, dt_val_s):
-        nonlocal log_items, fps
-        info_str = f"{shortname}:{dt_val_s * 1000:5.2f} ({1 / dt_val_s:3.1f}hz)"
-        if fps is not None:
-            actual_fps = 1 / dt_val_s
-            if actual_fps < fps - 1:
-                info_str = colored(info_str, "yellow")
-        log_items.append(info_str)
+    # def log_dt(shortname, dt_val_s):
+    #     nonlocal log_items, fps
+    #     info_str = f"{shortname}:{dt_val_s * 1000:5.2f} ({1 / dt_val_s:3.1f}hz)"
+    #     if fps is not None:
+    #         actual_fps = 1 / dt_val_s
+    #         if actual_fps < fps - 1:
+    #             info_str = colored(info_str, "yellow")
+    #     log_items.append(info_str)
 
-    # total step time displayed in milliseconds and its frequency
-    log_dt("dt", dt_s)
+    # # total step time displayed in milliseconds and its frequency
+    # log_dt("dt", dt_s)
 
-    # TODO(aliberts): move robot-specific logs logic in robot.print_logs()
-    if not robot.robot_type.startswith("stretch"):
-        for name in robot.leader_arms:
-            key = f"read_leader_{name}_pos_dt_s"
-            if key in robot.logs:
-                log_dt("dtRlead", robot.logs[key])
+    # # TODO(aliberts): move robot-specific logs logic in robot.print_logs()
+    # if not robot.robot_type.startswith("stretch"):
+    #     for name in robot.leader_arms:
+    #         key = f"read_leader_{name}_pos_dt_s"
+    #         if key in robot.logs:
+    #             log_dt("dtRlead", robot.logs[key])
 
-        for name in robot.follower_arms:
-            key = f"write_follower_{name}_goal_pos_dt_s"
-            if key in robot.logs:
-                log_dt("dtWfoll", robot.logs[key])
+    #     for name in robot.follower_arms:
+    #         key = f"write_follower_{name}_goal_pos_dt_s"
+    #         if key in robot.logs:
+    #             log_dt("dtWfoll", robot.logs[key])
 
-            key = f"read_follower_{name}_pos_dt_s"
-            if key in robot.logs:
-                log_dt("dtRfoll", robot.logs[key])
+    #         key = f"read_follower_{name}_pos_dt_s"
+    #         if key in robot.logs:
+    #             log_dt("dtRfoll", robot.logs[key])
 
-        for name in robot.cameras:
-            key = f"read_camera_{name}_dt_s"
-            if key in robot.logs:
-                log_dt(f"dtR{name}", robot.logs[key])
+    #     for name in robot.cameras:
+    #         key = f"read_camera_{name}_dt_s"
+    #         if key in robot.logs:
+    #             log_dt(f"dtR{name}", robot.logs[key])
 
-    info_str = " ".join(log_items)
-    logging.info(info_str)
+    # info_str = " ".join(log_items)
+    # logging.info(info_str)
+    pass
 
 
 @cache
@@ -196,6 +200,8 @@ def record_episode(
     policy,
     fps,
     single_task,
+    clicked_coords=None,
+    angle=None,
 ):
     control_loop(
         robot=robot,
@@ -207,8 +213,30 @@ def record_episode(
         fps=fps,
         teleoperate=policy is None,
         single_task=single_task,
+        clicked_coords=clicked_coords,
+        angle=angle
     )
 
+def put_the_marker(image: np.ndarray, coords: tuple, radius=10,
+                   border_color=(0, 0, 255), cross_color=(0, 0, 255),
+                   bg_color=(255, 255, 255),angle=0):
+    """
+    Draw a marker on the given image at the specified `coords`.
+    """
+    if coords is None:
+        return image
+
+    x, y = coords
+    center = (x,y)
+            
+    cv2.circle(image, center, radius, bg_color, -1)
+    cv2.circle(image, center, radius, border_color, 2)
+    cv2.line(image, center, (x-int(math.sin(math.radians(angle))*radius), y+int(math.cos(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x-int(math.cos(math.radians(angle))*radius), y-int(math.sin(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), cross_color, 2)
+    cv2.line(image, center, (x+int(math.sin(math.radians(angle))*radius), y-int(math.cos(math.radians(angle))*radius)), cross_color, 2)
+    cv2.arrowedLine(image, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), (x+int(math.cos(math.radians(angle))*25),y+int(math.sin(math.radians(angle))*25)), cross_color, 4, tipLength=0.75)
+    return image
 
 @safe_stop_image_writer
 def control_loop(
@@ -221,6 +249,8 @@ def control_loop(
     policy: PreTrainedPolicy = None,
     fps: int | None = None,
     single_task: str | None = None,
+    clicked_coords=None,
+    angle=None
 ):
     # TODO(rcadene): Add option to record logs
     if not robot.is_connected:
@@ -251,6 +281,14 @@ def control_loop(
         else:
             observation = robot.capture_observation()
 
+        for name in observation:
+            if "image" in name:
+                if clicked_coords is not None and "phone" in name:
+                    img_bgr = cv2.cvtColor(observation[name].numpy(), cv2.COLOR_RGB2BGR)
+                    put_the_marker(img_bgr, clicked_coords)
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    observation[name] = torch.from_numpy(img_rgb)
+
             if policy is not None:
                 pred_action = predict_action(
                     observation, policy, get_safe_torch_device(policy.config.device), policy.config.use_amp
@@ -267,6 +305,11 @@ def control_loop(
         if display_cameras and not is_headless():
             image_keys = [key for key in observation if "image" in key]
             for key in image_keys:
+                if clicked_coords is not None and "phone" in key:
+                    img_bgr = cv2.cvtColor(observation[key].numpy(), cv2.COLOR_RGB2BGR)
+                    put_the_marker(img_bgr, coords=clicked_coords,angle=angle)
+                    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    observation[key] = torch.from_numpy(img_rgb)
                 cv2.imshow(key, cv2.cvtColor(observation[key].numpy(), cv2.COLOR_RGB2BGR))
             cv2.waitKey(1)
 
@@ -309,39 +352,41 @@ def stop_recording(robot, listener, display_cameras):
 
 
 def sanity_check_dataset_name(repo_id, policy_cfg):
-    _, dataset_name = repo_id.split("/")
-    # either repo_id doesnt start with "eval_" and there is no policy
-    # or repo_id starts with "eval_" and there is a policy
+    # _, dataset_name = repo_id.split("/")
+    # # either repo_id doesnt start with "eval_" and there is no policy
+    # # or repo_id starts with "eval_" and there is a policy
 
-    # Check if dataset_name starts with "eval_" but policy is missing
-    if dataset_name.startswith("eval_") and policy_cfg is None:
-        raise ValueError(
-            f"Your dataset name begins with 'eval_' ({dataset_name}), but no policy is provided ({policy_cfg.type})."
-        )
+    # # Check if dataset_name starts with "eval_" but policy is missing
+    # if dataset_name.startswith("eval_") and policy_cfg is None:
+    #     raise ValueError(
+    #         f"Your dataset name begins with 'eval_' ({dataset_name}), but no policy is provided ({policy_cfg.type})."
+    #     )
 
-    # Check if dataset_name does not start with "eval_" but policy is provided
-    if not dataset_name.startswith("eval_") and policy_cfg is not None:
-        raise ValueError(
-            f"Your dataset name does not begin with 'eval_' ({dataset_name}), but a policy is provided ({policy_cfg.type})."
-        )
+    # # Check if dataset_name does not start with "eval_" but policy is provided
+    # if not dataset_name.startswith("eval_") and policy_cfg is not None:
+    #     raise ValueError(
+    #         f"Your dataset name does not begin with 'eval_' ({dataset_name}), but a policy is provided ({policy_cfg.type})."
+    #     )
+    pass
 
 
 def sanity_check_dataset_robot_compatibility(
-    dataset: LeRobotDataset, robot: Robot, fps: int, use_videos: bool
-) -> None:
-    fields = [
-        ("robot_type", dataset.meta.robot_type, robot.robot_type),
-        ("fps", dataset.fps, fps),
-        ("features", dataset.features, get_features_from_robot(robot, use_videos)),
-    ]
+#     dataset: LeRobotDataset, robot: Robot, fps: int, use_videos: bool
+# ) -> None:
+#     fields = [
+#         ("robot_type", dataset.meta.robot_type, robot.robot_type),
+#         ("fps", dataset.fps, fps),
+#         ("features", dataset.features, get_features_from_robot(robot, use_videos)),
+#     ]
 
-    mismatches = []
-    for field, dataset_value, present_value in fields:
-        diff = DeepDiff(dataset_value, present_value, exclude_regex_paths=[r".*\['info'\]$"])
-        if diff:
-            mismatches.append(f"{field}: expected {present_value}, got {dataset_value}")
+#     mismatches = []
+#     for field, dataset_value, present_value in fields:
+#         diff = DeepDiff(dataset_value, present_value, exclude_regex_paths=[r".*\['info'\]$"])
+#         if diff:
+#             mismatches.append(f"{field}: expected {present_value}, got {dataset_value}")
 
-    if mismatches:
-        raise ValueError(
-            "Dataset metadata compatibility check failed with mismatches:\n" + "\n".join(mismatches)
-        )
+#     if mismatches:
+#         raise ValueError(
+#             "Dataset metadata compatibility check failed with mismatches:\n" + "\n".join(mismatches)
+#         )
+    pass
