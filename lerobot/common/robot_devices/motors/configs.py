@@ -41,9 +41,10 @@ class FeetechMotorsBusConfig(MotorsBusConfig):
     mock: bool = False
 
 
-@MotorsBusConfig.register_subclass("revobot")
+@MotorsBusConfig.register_subclass("revomotor")
 @dataclass
 class RevobotMotorsBusConfig(MotorsBusConfig):
-    port: str
+    socket_ip: str
+    socket_port: int
     motors: dict[str, tuple[int, str]]
     mock: bool = False

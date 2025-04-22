@@ -1,16 +1,10 @@
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Apr  6 06:25:46 2025
+
+@author: aadi
+"""
+
 """
 Utilities to control a robot.
 
@@ -556,6 +550,31 @@ def replay(
 
         dt_s = time.perf_counter() - start_episode_t
         log_control_info(robot, dt_s, fps=cfg.fps)
+        
+
+@safe_disconnect
+def replay_for_record(robot,ep
+):
+    # TODO(rcadene, aliberts): refactor with control_loop, once `dataset` is an instance of LeRobotDataset
+    # TODO(rcadene): Add option to record logs
+
+    dataset = LeRobotDataset("revobots_reach_the_object_2", 'data', episodes=ep)
+    actions = dataset.hf_dataset.select_columns("action")
+
+    if not robot.is_connected:
+        robot.connect()
+
+    for idx in range(dataset.num_frames):
+        start_episode_t = time.perf_counter()
+
+        action = actions[idx]["action"]
+        robot.send_action(action)
+
+        dt_s = time.perf_counter() - start_episode_t
+        busy_wait(1 / 30 - dt_s)
+
+        dt_s = time.perf_counter() - start_episode_t
+        log_control_info(robot, dt_s, fps=30)
 
 
 @parser.wrap()
@@ -587,4 +606,17 @@ def control_robot(cfg: ControlPipelineConfig):
 
 
 if __name__ == "__main__":
+    ################################################################################
+    # Global variables
+    ################################################################################
+    program_ending = False
+    clicked_coords = None    # Will hold (x, y) or None
+    use_manual_detection = True  # Global flag: True if user chooses manual detection
+    angle = 0
+    # Store latest frames for cameras
+    img_buffer = {"phone": None, "laptop": None}
+    
+    ################################################################################
+    # Initialise control robot
+    ################################################################################
     control_robot()
