@@ -73,7 +73,53 @@ class ManipulatorRobotConfig(RobotConfig):
                         "Note: This feature does not yet work with robots where different follower arms have "
                         "different numbers of motors."
                     )
+                    
+                    
+@dataclass
+class RevobotManipulatorRobotConfig:
+    leader_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
+    follower_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
+    cameras: dict[str, CameraConfig] = field(default_factory=lambda: {})
 
+    # Optionally limit the magnitude of the relative positional target vector for safety purposes.
+    max_relative_target: list[float] | float | None = None
+
+    # Optionally set the leader arm in torque mode with the gripper motor set to this angle.
+    gripper_open_degree: float | None = None
+
+    # === Extra Revobot configuration variables ===
+    use_revobot_leader: bool = False
+    use_revobot_follower: bool = False
+    
+    leader_robot_type: str | None = None
+    
+    revobot_leader_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
+    revobot_follower_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
+
+    mock: bool = False
+
+    def __post_init__(self):
+        if self.mock:
+            for arm in self.leader_arms.values():
+                if not arm.mock:
+                    arm.mock = True
+            for arm in self.follower_arms.values():
+                if not arm.mock:
+                    arm.mock = True
+            for cam in self.cameras.values():
+                if not cam.mock:
+                    cam.mock = True
+
+        if self.max_relative_target is not None and isinstance(self.max_relative_target, Sequence):
+            for name in self.follower_arms:
+                if len(self.follower_arms[name].motors) != len(self.max_relative_target):
+                    raise ValueError(
+                        f"len(max_relative_target)={len(self.max_relative_target)} but the follower arm with name {name} has "
+                        f"{len(self.follower_arms[name].motors)} motors. Please make sure that the "
+                        f"`max_relative_target` list has as many parameters as there are motors per arm. "
+                        "Note: This feature does not yet work with robots where different follower arms have "
+                        "different numbers of motors."
+                    )
 
 @RobotConfig.register_subclass("aloha")
 @dataclass
@@ -362,115 +408,6 @@ class KochBimanualRobotConfig(ManipulatorRobotConfig):
     mock: bool = False
 
 
-@RobotConfig.register_subclass("revobot")
-@dataclass
-class RevobotConfig(ManipulatorRobotConfig):
-    calibration_dir: str = ".cache/calibration/koch"
-    # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
-    # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
-    # the number of motors in your follower arms.
-    max_relative_target: int | None = None
-    
-    use_revobot_leader: False
-    use_revobot_follower: True
-
-    leader_arms: dict[str, MotorsBusConfig] = field(
-        default_factory=lambda: {
-            "main": DynamixelMotorsBusConfig(
-                port="/dev/ttyACM1",
-                motors={
-                    # name: (index, model)
-                    "shoulder_pan": [1, "xl330-m077"],
-                    "shoulder_lift": [2, "xl330-m077"],
-                    "elbow_flex": [3, "xl330-m077"],
-                    "wrist_flex": [4, "xl330-m077"],
-                    "wrist_roll": [5, "xl330-m077"],
-                    "gripper": [6, "xl330-m077"],
-                },
-            ),
-        }
-    )
-
-    follower_arms: dict[str, MotorsBusConfig] = field(
-        default_factory=lambda: {
-            "main": DynamixelMotorsBusConfig(
-                port="/dev/ttyACM0",
-                motors={
-                    # name: (index, model)
-                    "shoulder_pan": [1, "xl430-w250"],
-                    "shoulder_lift": [2, "xl430-w250"],
-                    "elbow_flex": [3, "xl330-m288"],
-                    "wrist_flex": [4, "xl330-m288"],
-                    "wrist_roll": [5, "xl330-m288"],
-                    "gripper": [6, "xl330-m288"],
-                },
-            ),
-        }
-    )
-
-    cameras: dict[str, CameraConfig] = field(
-        default_factory=lambda: {
-            "laptop": OpenCVCameraConfig(
-                camera_index=12,
-                fps=30,
-                width=640,
-                height=480,
-            ),
-            "phone": OpenCVCameraConfig(
-                camera_index=6,
-                fps=30,
-                width=640,
-                height=480,
-            ),
-        }
-    )
-    
-    revobot_leader_arms: dict[str, MotorsBusConfig] = field(
-        default_factory=lambda: {
-            "main": RevobotMotorsBusConfig(
-                socket_ip= "192.168.0.142",
-                #socket_ip: "97.188.81.36"
-                socket_port= 50001,
-                motors={
-                    # name: (index, model)
-                    "shoulder_pan": [1, "xl330-m077"],
-                    "shoulder_lift": [2, "xl330-m077"],
-                    "elbow_flex": [3, "xl330-m077"],
-                    "wrist_flex": [4, "xl330-m077"],
-                    "wrist_roll": [5, "xl330-m077"],
-                    "gripper": [6, "xl330-m077"],
-                },
-            ),
-        }
-    )
-
-    revobot_follower_arms: dict[str, MotorsBusConfig] = field(
-        default_factory=lambda: {
-            "main": RevobotMotorsBusConfig(
-                socket_ip= "192.168.0.142",
-                #socket_ip: "97.188.81.36"
-                socket_port= 50000,
-                motors={
-                    # name: (index, model)
-                    "shoulder_pan": [1, "xl430-w250"],
-                    "shoulder_lift": [2, "xl430-w250"],
-                    "elbow_flex": [3, "xl330-m288"],
-                    "wrist_flex": [4, "xl330-m288"],
-                    "wrist_roll": [5, "xl330-m288"],
-                    "gripper": [6, "xl330-m288"],
-                },
-            ),
-        }
-    )
-
-
-    # ~ Koch specific settings ~
-    # Sets the leader arm in torque mode with the gripper motor set to this angle. This makes it possible
-    # to squeeze the gripper and have it spring back to an open position on its own.
-    gripper_open_degree: float = 35.156
-
-    mock: bool = False
-
 
 @RobotConfig.register_subclass("moss")
 @dataclass
@@ -713,5 +650,117 @@ class LeKiwiRobotConfig(RobotConfig):
             "quit": "q",
         }
     )
+
+    mock: bool = False
+    
+
+
+@RobotConfig.register_subclass("revobot")
+@dataclass
+class RevobotRobotConfig(RevobotManipulatorRobotConfig):
+    calibration_dir: str = ".cache/calibration/koch"
+    # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
+    # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
+    # the number of motors in your follower arms.
+    max_relative_target: int | None = None
+    
+    use_revobot_leader: False
+    use_revobot_follower: True
+    leader_robot_type: str = 'koch' 
+
+    leader_arms: dict[str, MotorsBusConfig] = field(
+        default_factory=lambda: {
+            "main": DynamixelMotorsBusConfig(
+                port="/dev/ttyACM1",
+                motors={
+                    # name: (index, model)
+                    "shoulder_pan": [1, "xl330-m077"],
+                    "shoulder_lift": [2, "xl330-m077"],
+                    "elbow_flex": [3, "xl330-m077"],
+                    "wrist_flex": [4, "xl330-m077"],
+                    "wrist_roll": [5, "xl330-m077"],
+                    "gripper": [6, "xl330-m077"],
+                },
+            ),
+        }
+    )
+
+    follower_arms: dict[str, MotorsBusConfig] = field(
+        default_factory=lambda: {
+            "main": DynamixelMotorsBusConfig(
+                port="/dev/ttyACM0",
+                motors={
+                    # name: (index, model)
+                    "shoulder_pan": [1, "xl430-w250"],
+                    "shoulder_lift": [2, "xl430-w250"],
+                    "elbow_flex": [3, "xl330-m288"],
+                    "wrist_flex": [4, "xl330-m288"],
+                    "wrist_roll": [5, "xl330-m288"],
+                    "gripper": [6, "xl330-m288"],
+                },
+            ),
+        }
+    )
+
+    cameras: dict[str, CameraConfig] = field(
+        default_factory=lambda: {
+            "laptop": OpenCVCameraConfig(
+                camera_index=12,
+                fps=30,
+                width=640,
+                height=480,
+            ),
+            "phone": OpenCVCameraConfig(
+                camera_index=6,
+                fps=30,
+                width=640,
+                height=480,
+            ),
+        }
+    )
+    
+    revobot_leader_arms: dict[str, MotorsBusConfig] = field(
+        default_factory=lambda: {
+            "main": RevobotMotorsBusConfig(
+                socket_ip= "192.168.0.142",
+                #socket_ip: "97.188.81.36"
+                socket_port= 50001,
+                motors={
+                    # name: (index, model)
+                    "shoulder_pan": [1, "a"],
+                    "shoulder_lift": [2, "b"],
+                    "elbow_flex": [3, "c"],
+                    "wrist_flex": [4, "d"],
+                    "wrist_roll": [5, "e"],
+                    "gripper": [6, "f"],
+                },
+            ),
+        }
+    )
+
+    revobot_follower_arms: dict[str, MotorsBusConfig] = field(
+        default_factory=lambda: {
+            "main": RevobotMotorsBusConfig(
+                socket_ip= "192.168.0.142",
+                #socket_ip: "97.188.81.36"
+                socket_port= 50000,
+                motors={
+                    # name: (index, model)
+                    "shoulder_pan": [1, "a"],
+                    "shoulder_lift": [2, "b"],
+                    "elbow_flex": [3, "c"],
+                    "wrist_flex": [4, "d"],
+                    "wrist_roll": [5, "e"],
+                    "gripper": [6, "f"],
+                },
+            ),
+        }
+    )
+
+
+    # ~ Koch specific settings ~
+    # Sets the leader arm in torque mode with the gripper motor set to this angle. This makes it possible
+    # to squeeze the gripper and have it spring back to an open position on its own.
+    gripper_open_degree: float = 35.156
 
     mock: bool = False

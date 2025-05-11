@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Apr  6 08:09:56 2025
+
+@author: aadi
+"""
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +22,9 @@ from typing import Protocol
 
 from lerobot.common.robot_devices.motors.configs import (
     DynamixelMotorsBusConfig,
-    FeetechMotorsBusConfig,
-    RevobotMotorsBusConfig,
+    FeetechMotorsBusConfig,   
     MotorsBusConfig,
+    RevobotMotorsBusConfig,
 )
 
 
@@ -45,10 +51,10 @@ def make_motors_buses_from_configs(motors_bus_configs: dict[str, MotorsBusConfig
 
             motors_buses[key] = FeetechMotorsBus(cfg)
 
-        elif cfg.type == "revobot":
-            from lerobot.common.robot_devices.motors.revomotors import RevobotRobotBus
+        elif cfg.type == "revomotor":
+            from lerobot.common.robot_devices.motors.revomotors import RevobotMotorsBus
 
-            motors_buses[key] = RevobotRobotBus(cfg)
+            motors_buses[key] = RevobotMotorsBus(cfg)
 
         else:
             raise ValueError(f"The motor type '{cfg.type}' is not valid.")
@@ -69,11 +75,11 @@ def make_motors_bus(motor_type: str, **kwargs) -> MotorsBus:
         config = FeetechMotorsBusConfig(**kwargs)
         return FeetechMotorsBus(config)
 
-    elif motor_type == "revobot":
-        from lerobot.common.robot_devices.motors.revomotors import RevobotRobotBus
+    elif motor_type == "revomotor":
+        from lerobot.common.robot_devices.motors.revomotors import RevobotMotorsBus
 
         config = RevobotMotorsBusConfig(**kwargs)
-        return RevobotRobotBus(config)
+        return RevobotMotorsBus(config)
 
     else:
         raise ValueError(f"The motor type '{motor_type}' is not valid.")

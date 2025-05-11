@@ -373,6 +373,17 @@ def record(
     while True:
         if recorded_episodes >= cfg.num_episodes:
             break
+        
+        print("teleoperate to desired position")
+        log_say("teleoperate to desired position", cfg.play_sounds)
+        control_loop(
+            robot,
+            control_time_s=cfg.teleop_time_s,
+            fps=cfg.fps,
+            teleoperate=True,
+            display_cameras=cfg.display_cameras,
+            events=events
+        )
 
         log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
         record_episode(
@@ -473,10 +484,22 @@ def record_with_marker(
         if recorded_episodes >= cfg.num_episodes:
             break
 
+        print("teleoperate to desired position")
+        log_say("teleoperate to desired position", cfg.play_sounds)
+        control_loop(
+            robot,
+            control_time_s=cfg.teleop_time_s,
+            fps=cfg.fps,
+            teleoperate=True,
+            display_cameras=cfg.display_cameras,
+            events=events
+        )
+        
         print("put marker and use top and down button for angle")
         log_say("put marker", cfg.play_sounds)
         detect_target_coords(robot, events)
-
+        
+        
         log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
         record_episode(
             robot=robot,
@@ -497,7 +520,7 @@ def record_with_marker(
         # Skip reset for the last episode to be recorded
         if not events["stop_recording"] and (
             (recorded_episodes < cfg.num_episodes - 1) or events["rerecord_episode"]
-        ):
+        ):            
             log_say("Reset the environment", cfg.play_sounds)
             reset_environment(robot, events, cfg.reset_time_s, cfg.fps)
 
@@ -551,30 +574,6 @@ def replay(
         dt_s = time.perf_counter() - start_episode_t
         log_control_info(robot, dt_s, fps=cfg.fps)
         
-
-@safe_disconnect
-def replay_for_record(robot,ep
-):
-    # TODO(rcadene, aliberts): refactor with control_loop, once `dataset` is an instance of LeRobotDataset
-    # TODO(rcadene): Add option to record logs
-
-    dataset = LeRobotDataset("revobots_reach_the_object_2", 'data', episodes=ep)
-    actions = dataset.hf_dataset.select_columns("action")
-
-    if not robot.is_connected:
-        robot.connect()
-
-    for idx in range(dataset.num_frames):
-        start_episode_t = time.perf_counter()
-
-        action = actions[idx]["action"]
-        robot.send_action(action)
-
-        dt_s = time.perf_counter() - start_episode_t
-        busy_wait(1 / 30 - dt_s)
-
-        dt_s = time.perf_counter() - start_episode_t
-        log_control_info(robot, dt_s, fps=30)
 
 
 @parser.wrap()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Tue Feb 25 13:20:28 2025
+Created on Thu May 8 13:20:28 2025
 
 @author: aadi
 """
@@ -14,6 +14,8 @@ from collections import namedtuple
 import numpy as np
 
 write_call_counter = 0
+pause_gripper_angle = 32
+
 RobotData = namedtuple("RobotData", [
     "position",
     "delta",
@@ -53,6 +55,9 @@ class RevobotRobotBus:
             RobotData(0, 0, 0, 0, 0, 0, 0, 0, 0, 0) for _ in range(8)
         ]
         self.joint67Status = Joint67Status(0, 0, 0, 0)
+        rest_position = [ -0.43945312, 117.509766, 118.916016, 85.78125, -4.482422, 34.716797  ]
+
+        self.temp_values = rest_position
 
 
     def find_motor_indices(self):
@@ -222,9 +227,12 @@ class RevobotRobotBus:
                 positions.append(0.0)
         # For joints 6 and 7, we use joint67Status.
         positions.append(float(self.joint67Status.j6Position)/88.8889)
-        positions.append(float(self.joint67Status.j7Position)/120)
+        positions.append(float(self.joint67Status.j7Position)/120) # default 120, 171.4
         if len(positions) == 7:
             positions.pop(4)
+        
+        positions = np.array(positions)
+        positions = positions.astype(np.int32)
         
         return positions
     
@@ -234,9 +242,9 @@ class RevobotRobotBus:
         Different joints use different scaling and offset adjustments.
         """
         if index == 5:  # 6th position (0-based index)
-            return int((-31.5 - int(value)) * 88.8889)
+            return int((67.5 - int(value)) * 88.8889)
         elif index == 6:  # 7th position (0-based index)
-            return int(value * 740)
+            return int(value * 700)
         elif index == 1:
             return int((90 - int(value)) * 3600)
         elif index == 3:
@@ -245,22 +253,29 @@ class RevobotRobotBus:
             return int(value * 3600)
 
     def write(self, data_name:str, values=[], motor_names=None):
-        global write_call_counter
+        global write_call_counter, pause_gripper_angle
         write_call_counter += 1
+        
+        # # to pause during gripping at time of teleop
+        # if values[5] < pause_gripper_angle:
+        #     values[:5] = self.temp_values[:5]  # fallback to previous
+        # else:
+        #     self.temp_values = values.copy()
         # print(np.array(values).tolist())
         # print(values)
         values_list = np.array(values).tolist()
+        # print(values_list)
         if len(values_list) < 7:
             values_list.insert(4, 0)
         
-        command_parts = ["xxx xxx xxx xxx a"]
+        command_parts = ["xxx xxx xxx xxx P"]
         for i, value in enumerate(values_list):
             computed = self.revobot_robot_offset(i, value)
             command_parts.append(str(computed))
         command = " ".join(command_parts) + ";"
         
         # print(command)
-        if  write_call_counter == 15:
+        if  write_call_counter == 1:
             self.send_command(command)
             write_call_counter = 0
         else:
@@ -272,10 +287,26 @@ class RevobotRobotBus:
             these parameters only execute once for every socket connection."""
             
         init_config_lst = [
-                "S AngularSpeedStartAndEnd 60000", 
-                "S AngularSpeed 80000",
-                "S AngularAcceleration 104000"
-               ]
+                "S AngularSpeedStartAndEnd 10000", 
+                "S AngularSpeed 10000",
+                "S AngularAcceleration 10000",
+                "S J1_PID_P 0.04",
+                "S J2_PID_P 0.04",
+                "S J3_PID_P 0.04",
+                "S J4_PID_P 0.04",
+                "S J5_PID_P 0.04"
+                ]
+        
+        # init_config_lst = [
+        #         "S AngularSpeedStartAndEnd 10000", 
+        #         "S AngularSpeed 10000",
+        #         "S AngularAcceleration 10000",
+        #         "S J1_PID_P 0.12",
+        #         "S J2_PID_P 0.12",
+        #         "S J3_PID_P 0.12",
+        #         "S J4_PID_P 0.12",
+        #         "S J5_PID_P 0.5"
+        #         ]
         
         for i in init_config_lst:
             command = f"xxx xxx xxx xxx {i};"
