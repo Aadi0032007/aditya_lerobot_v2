@@ -13,6 +13,12 @@ from typing import List, Optional, Tuple
 from collections import namedtuple
 import numpy as np
 
+
+
+from lerobot.common.robot_devices.motors.configs import RevobotMotorsBusConfig
+from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError, RobotDeviceNotConnectedError
+from lerobot.common.utils.utils import capture_timestamp_utc
+
 write_call_counter = 0
 pause_gripper_angle = 32
 
@@ -37,15 +43,17 @@ Joint67Status = namedtuple("Joint67Status", [
 ])
 
 
-class RevobotRobotBus:
+class RevobotMotorsBus:
     RD_SIZE = 40  # bytes per RobotData block (10 ints * 4 bytes)
     # Precompile struct format for 10 integers
     RD_STRUCT = struct.Struct('10i')
     
-    def __init__(self, socket_ip: str, socket_port: int, motors: dict[str, Tuple[int, str]]):
-        self.socket_ip = socket_ip
-        self.socket_port = socket_port
-        self.motors = motors
+    def __init__(self,
+    config: RevobotMotorsBusConfig,
+    ):
+        self.socket_ip = config.socket_ip
+        self.socket_port = config.socket_port
+        self.motors = config.motors
         self.sock = None
         self.calibration = None
         # self.skip_frames=skip_frame

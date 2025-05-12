@@ -76,7 +76,7 @@ class ManipulatorRobotConfig(RobotConfig):
                     
                     
 @dataclass
-class RevobotManipulatorRobotConfig:
+class RevobotManipulatorRobotConfig(RobotConfig):
     leader_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
     follower_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
     cameras: dict[str, CameraConfig] = field(default_factory=lambda: {})
@@ -664,14 +664,14 @@ class RevobotRobotConfig(RevobotManipulatorRobotConfig):
     # the number of motors in your follower arms.
     max_relative_target: int | None = None
     
-    use_revobot_leader: False
-    use_revobot_follower: True
+    use_revobot_leader: bool = False
+    use_revobot_follower: bool = True
     leader_robot_type: str = 'koch' 
 
     leader_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": DynamixelMotorsBusConfig(
-                port="/dev/ttyACM1",
+                port="/dev/ttyACM0",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [1, "xl330-m077"],
@@ -688,7 +688,7 @@ class RevobotRobotConfig(RevobotManipulatorRobotConfig):
     follower_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": DynamixelMotorsBusConfig(
-                port="/dev/ttyACM0",
+                port="/dev/ttyACM1",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [1, "xl430-w250"],
