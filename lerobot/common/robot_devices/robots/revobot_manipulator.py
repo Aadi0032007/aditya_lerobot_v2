@@ -93,7 +93,6 @@ class RevobotManipulatorRobot:
         else:
             self.follower_arms = make_motors_buses_from_configs(self.config.follower_arms)
         
-        self.cameras = self.config.cameras
         self.is_connected = False
         self.logs = {}
 
@@ -293,24 +292,27 @@ class RevobotManipulatorRobot:
             # to make it move, and it will move back to its original target position when we release the force.
             # 5 corresponds to Current Controlled Position on Koch gripper motors "xl330-m077, xl330-m288"
             arm.write("Operating_Mode", 5, "gripper")
+            
+        if self.use_revobot_follower == False:
+            for name in self.follower_arms:
+                set_operating_mode_(self.follower_arms[name])
+    
+                # Set better PID values to close the gap between recorded states and actions
+                # TODO(rcadene): Implement an automatic procedure to set optimal PID values for each motor
+                self.follower_arms[name].write("Position_P_Gain", 1500, "elbow_flex")
+                self.follower_arms[name].write("Position_I_Gain", 0, "elbow_flex")
+                self.follower_arms[name].write("Position_D_Gain", 600, "elbow_flex")
 
-        for name in self.follower_arms:
-            set_operating_mode_(self.follower_arms[name])
-
-            # Set better PID values to close the gap between recorded states and actions
-            # TODO(rcadene): Implement an automatic procedure to set optimal PID values for each motor
-            self.follower_arms[name].write("Position_P_Gain", 1500, "elbow_flex")
-            self.follower_arms[name].write("Position_I_Gain", 0, "elbow_flex")
-            self.follower_arms[name].write("Position_D_Gain", 600, "elbow_flex")
-
+        
         if self.config.gripper_open_degree is not None:
-            for name in self.leader_arms:
-                set_operating_mode_(self.leader_arms[name])
-
-                # Enable torque on the gripper of the leader arms, and move it to 45 degrees,
-                # so that we can use it as a trigger to close the gripper of the follower arms.
-                self.leader_arms[name].write("Torque_Enable", 1, "gripper")
-                self.leader_arms[name].write("Goal_Position", self.config.gripper_open_degree, "gripper")
+            if self.use_revobot_leader == False:
+                for name in self.leader_arms:
+                    set_operating_mode_(self.leader_arms[name])
+    
+                    # Enable torque on the gripper of the leader arms, and move it to 45 degrees,
+                    # so that we can use it as a trigger to close the gripper of the follower arms.
+                    self.leader_arms[name].write("Torque_Enable", 1, "gripper")
+                    self.leader_arms[name].write("Goal_Position", self.config.gripper_open_degree, "gripper")
 
     def set_aloha_robot_preset(self):
         def set_shadow_(arm):
