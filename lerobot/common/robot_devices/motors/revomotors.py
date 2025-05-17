@@ -240,7 +240,7 @@ class RevobotMotorsBus:
             positions.pop(4)
         
         positions = np.array(positions)
-        positions = positions.astype(np.int32)
+        positions = positions.astype(np.float32)
         
         return positions
     
