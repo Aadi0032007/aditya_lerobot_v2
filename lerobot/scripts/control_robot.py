@@ -378,7 +378,6 @@ def record(
         log_say("teleoperate to desired position", cfg.play_sounds)
         control_loop(
             robot,
-            control_time_s=cfg.teleop_time_s,
             fps=cfg.fps,
             teleoperate=True,
             display_cameras=cfg.display_cameras,
@@ -488,7 +487,6 @@ def record_with_marker(
         log_say("teleoperate to desired position", cfg.play_sounds)
         control_loop(
             robot,
-            control_time_s=cfg.teleop_time_s,
             fps=cfg.fps,
             teleoperate=True,
             display_cameras=cfg.display_cameras,
