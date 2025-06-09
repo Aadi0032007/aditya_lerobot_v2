@@ -144,7 +144,7 @@ from lerobot.common.robot_devices.control_configs import (
     ControlConfig,
     ControlPipelineConfig,
     RecordControlConfig,
-    RecordWithMarkerConfig,
+    RemoteRevobotRobotConfig,
     RemoteRobotConfig,
     ReplayControlConfig,
     TeleoperateControlConfig,
@@ -437,6 +437,13 @@ def control_robot(cfg: ControlPipelineConfig):
 
         _init_rerun(control_config=cfg.control, session_name="Aditya_control_loop_remote")
         run_lekiwi(cfg.robot)
+        
+    elif isinstance(cfg.control, RemoteRevobotRobotConfig):
+        from lerobot.common.robot_devices.robots.revobot_remote import run_revobot
+
+        _init_rerun(control_config=cfg.control, session_name="Aditya_control_loop_remote")
+        run_revobot(cfg.robot)
+
 
     if robot.is_connected:
         # Disconnect manually to avoid a "Core dump" during process
