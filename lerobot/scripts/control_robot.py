@@ -170,90 +170,6 @@ import numpy as np
 import cv2
 import math
 
-################################################################################
-# Utility Functions
-################################################################################
-angle= 0
-
-def update_angle(key):
-    global angle
-
-    if key == Key.up:
-        angle -= 2
-    elif key == Key.down:
-        angle += 2
-listener_angle = Listener(on_press=update_angle)
-listener_angle.start()
-        
-def put_the_marker(image: np.ndarray, coords: tuple, radius=10,
-                   border_color=(0, 0, 255), cross_color=(0, 0, 255),
-                   bg_color=(255, 255, 255)):
-    """
-    Draw a marker on the given image at the specified `coords`.
-    """
-    if coords is None:
-        return image
-
-    global angle
-    x, y = coords
-    center = (x,y)
-            
-    cv2.circle(image, center, radius, bg_color, -1)
-    cv2.circle(image, center, radius, border_color, 2)
-    cv2.line(image, center, (x-int(math.sin(math.radians(angle))*radius), y+int(math.cos(math.radians(angle))*radius)), cross_color, 2)
-    cv2.line(image, center, (x-int(math.cos(math.radians(angle))*radius), y-int(math.sin(math.radians(angle))*radius)), cross_color, 2)
-    cv2.line(image, center, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), cross_color, 2)
-    cv2.line(image, center, (x+int(math.sin(math.radians(angle))*radius), y-int(math.cos(math.radians(angle))*radius)), cross_color, 2)
-    cv2.arrowedLine(image, (x+int(math.cos(math.radians(angle))*radius), y+int(math.sin(math.radians(angle))*radius)), (x+int(math.cos(math.radians(angle))*25),y+int(math.sin(math.radians(angle))*25)), cross_color, 4, tipLength=0.75)
-    return image
-
-def on_mouse_double_click(event, x, y, flags, param):
-    """
-    Mouse callback that captures the (x, y) on double-click.
-    Only updates clicked_coords if manual detection is active.
-    """
-    global clicked_coords, use_manual_detection
-    if use_manual_detection and event == cv2.EVENT_LBUTTONDBLCLK:
-        clicked_coords = (x, y)
-        print(f"[Manual Detection] Double-click at: {clicked_coords}")
-
-def detect_target_coords(robot,events):
-    """
-    Starts the camera feed, allows manual detection via double-click,
-    and returns the selected coordinate after ENTER is pressed.
-    """
-    cv2.destroyAllWindows()
-    global clicked_coords, use_manual_detection,angle
-    clicked_coords = None
-    use_manual_detection = True  # Ensure manual detection is active
-    
-    if events is None:
-        events = {"exit_early": False}
-
-    cv2.namedWindow("phone", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("phone", 640, 480)
-    cv2.setMouseCallback("phone", on_mouse_double_click)
-
-    print("[Detection] Double-click to select a point. Press ENTER to confirm selection.")
-
-    while True:
-        frame = robot.cameras["phone"].async_read()
-        if frame is not None:
-            img_buffer["phone"] = frame.copy()
-            display_frame = cv2.cvtColor(img_buffer["phone"], cv2.COLOR_RGB2BGR)
-            if clicked_coords is not None:
-                put_the_marker(display_frame, clicked_coords)
-            cv2.imshow("phone", display_frame)
-
-        key = cv2.waitKey(1) & 0xFF
-        if events["exit_early"]:
-            events["exit_early"] = False
-            print(f"[Detection] ENTER pressed. Final selected point: {clicked_coords}")
-            break
-
-    cv2.destroyAllWindows()
-    return clicked_coords
-
 
 ########################################################################################
 # Control modes
@@ -434,120 +350,6 @@ def record(
     return dataset
 
 
-@safe_disconnect
-def record_with_marker(
-    robot: Robot,
-    cfg: RecordWithMarkerConfig,
-) -> LeRobotDataset:
-    # TODO(rcadene): Add option to record logs
-    if cfg.resume:
-        dataset = LeRobotDataset(
-            cfg.repo_id,
-            root=cfg.root,
-        )
-        if len(robot.cameras) > 0:
-            dataset.start_image_writer(
-                num_processes=cfg.num_image_writer_processes,
-                num_threads=cfg.num_image_writer_threads_per_camera * len(robot.cameras),
-            )
-        sanity_check_dataset_robot_compatibility(dataset, robot, cfg.fps, cfg.video)
-    else:
-        # Create empty dataset or load existing saved episodes
-        sanity_check_dataset_name(cfg.repo_id, cfg.policy)
-        dataset = LeRobotDataset.create(
-            cfg.repo_id,
-            cfg.fps,
-            root=cfg.root,
-            robot=robot,
-            use_videos=cfg.video,
-            image_writer_processes=cfg.num_image_writer_processes,
-            image_writer_threads=cfg.num_image_writer_threads_per_camera * len(robot.cameras),
-        )
-
-    # Load pretrained policy
-    policy = None if cfg.policy is None else make_policy(cfg.policy, ds_meta=dataset.meta)
-
-    if not robot.is_connected:
-        robot.connect()
-
-    listener, events = init_keyboard_listener()
-
-    # Execute a few seconds without recording to:
-    # 1. teleoperate the robot to move it in starting position if no policy provided,
-    # 2. give times to the robot devices to connect and start synchronizing,
-    # 3. place the cameras windows on screen
-    enable_teleoperation = policy is None
-    log_say("Warmup record", cfg.play_sounds)
-    warmup_record(robot, events, enable_teleoperation, cfg.warmup_time_s, cfg.display_data, cfg.fps)
-
-    if has_method(robot, "teleop_safety_stop"):
-        robot.teleop_safety_stop()
-
-    recorded_episodes = 0
-    while True:
-        if recorded_episodes >= cfg.num_episodes:
-            break
-
-        print("teleoperate to desired position")
-        log_say("teleoperate to desired position", cfg.play_sounds)
-        control_loop(
-            robot,
-            fps=cfg.fps,
-            teleoperate=True,
-            display_data=cfg.display_data,
-            events=events
-        )
-        
-        print("put marker and use top and down button for angle")
-        log_say("put marker", cfg.play_sounds)
-        detect_target_coords(robot, events)
-        
-        
-        log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
-        record_episode(
-            robot=robot,
-            dataset=dataset,
-            events=events,
-            episode_time_s=cfg.episode_time_s,
-            display_data=cfg.display_data,
-            policy=policy,
-            fps=cfg.fps,
-            single_task=cfg.single_task,
-            clicked_coords=clicked_coords,
-            angle=angle,
-        )
-
-        # Execute a few seconds without recording to give time to manually reset the environment
-        # Current code logic doesn't allow to teleoperate during this time.
-        # TODO(rcadene): add an option to enable teleoperation during reset
-        # Skip reset for the last episode to be recorded
-        if not events["stop_recording"] and (
-            (recorded_episodes < cfg.num_episodes - 1) or events["rerecord_episode"]
-        ):            
-            log_say("Reset the environment", cfg.play_sounds)
-            reset_environment(robot, events, cfg.reset_time_s, cfg.fps)
-
-        if events["rerecord_episode"]:
-            log_say("Re-record episode", cfg.play_sounds)
-            events["rerecord_episode"] = False
-            events["exit_early"] = False
-            dataset.clear_episode_buffer()
-            continue
-
-        dataset.save_episode()
-        recorded_episodes += 1
-
-        if events["stop_recording"]:
-            break
-
-    log_say("Stop recording", cfg.play_sounds, blocking=True)
-    stop_recording(robot, listener, cfg.display_data)
-
-    if cfg.push_to_hub:
-        dataset.push_to_hub(tags=cfg.tags, private=cfg.private)
-
-    log_say("Exiting", cfg.play_sounds)
-    return dataset
 
 @safe_disconnect
 def replay(
@@ -577,12 +379,12 @@ def replay(
         log_control_info(robot, dt_s, fps=cfg.fps)
 
 
-def _init_rerun(control_config: ControlConfig, session_name: str = "lerobot_control_loop") -> None:
+def _init_rerun(control_config: ControlConfig, session_name: str = "Aditya_control_loop") -> None:
     """Initializes the Rerun SDK for visualizing the control loop.
 
     Args:
         control_config: Configuration determining data display and robot type.
-        session_name: Rerun session name. Defaults to "lerobot_control_loop".
+        session_name: Rerun session name. Defaults to "Aditya_control_loop".
 
     Raises:
         ValueError: If viewer IP is missing for non-remote configurations with display enabled.
@@ -623,19 +425,17 @@ def control_robot(cfg: ControlPipelineConfig):
     if isinstance(cfg.control, CalibrateControlConfig):
         calibrate(robot, cfg.control)
     elif isinstance(cfg.control, TeleoperateControlConfig):
-        _init_rerun(control_config=cfg.control, session_name="lerobot_control_loop_teleop")
+        _init_rerun(control_config=cfg.control, session_name="Aditya_control_loop_teleop")
         teleoperate(robot, cfg.control)
     elif isinstance(cfg.control, RecordControlConfig):
-        _init_rerun(control_config=cfg.control, session_name="lerobot_control_loop_record")
+        _init_rerun(control_config=cfg.control, session_name="Aditya_control_loop_record")
         record(robot, cfg.control)
-    elif isinstance(cfg.control, RecordWithMarkerConfig):
-        record_with_marker(robot, cfg.control)
     elif isinstance(cfg.control, ReplayControlConfig):
         replay(robot, cfg.control)
     elif isinstance(cfg.control, RemoteRobotConfig):
         from lerobot.common.robot_devices.robots.lekiwi_remote import run_lekiwi
 
-        _init_rerun(control_config=cfg.control, session_name="lerobot_control_loop_remote")
+        _init_rerun(control_config=cfg.control, session_name="Aditya_control_loop_remote")
         run_lekiwi(cfg.robot)
 
     if robot.is_connected:
@@ -645,17 +445,4 @@ def control_robot(cfg: ControlPipelineConfig):
 
 
 if __name__ == "__main__":
-    ################################################################################
-    # Global variables
-    ################################################################################
-    program_ending = False
-    clicked_coords = None    # Will hold (x, y) or None
-    use_manual_detection = True  # Global flag: True if user chooses manual detection
-    angle = 0
-    # Store latest frames for cameras
-    img_buffer = {"phone": None, "laptop": None}
-    
-    ################################################################################
-    # Initialise control robot
-    ################################################################################
     control_robot()

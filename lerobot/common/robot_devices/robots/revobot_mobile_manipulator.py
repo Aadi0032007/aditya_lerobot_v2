@@ -1,25 +1,47 @@
-# -*- coding: utf-8 -*-
+# -- coding: utf-8 --
 """
-Created on Fri May  2 19:02:23 2025
+Created on Fri Jun  6 10:43:09 2025
 
 @author: aadi
 """
 
-import json
+
+import base64
 import logging
+import json
 import time
 import warnings
 from pathlib import Path
-
+import os
+import sys
+import cv2
+import torch
+import zmq
 import numpy as np
 import torch
 
 from lerobot.common.robot_devices.cameras.utils import make_cameras_from_configs
 from lerobot.common.robot_devices.motors.utils import MotorsBus, make_motors_buses_from_configs
-from lerobot.common.robot_devices.robots.configs import RevobotManipulatorRobotConfig
+from lerobot.common.robot_devices.robots.configs import MobileRevobotRobotConfig
 from lerobot.common.robot_devices.robots.utils import get_arm_id
 from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError, RobotDeviceNotConnectedError
 
+PYNPUT_AVAILABLE = True
+try:
+    # Only import if there's a valid X server or if we're not on a Pi
+    if ("DISPLAY" not in os.environ) and ("linux" in sys.platform):
+        print("No DISPLAY set. Skipping pynput import.")
+        raise ImportError("pynput blocked intentionally due to no display.")
+
+    from pynput import keyboard
+except ImportError:
+    keyboard = None
+    PYNPUT_AVAILABLE = False
+except Exception as e:
+    keyboard = None
+    PYNPUT_AVAILABLE = False
+    print(f"Could not import pynput: {e}")
+    
 
 def ensure_safe_goal_position(
     goal_pos: torch.Tensor, present_pos: torch.Tensor, max_relative_target: float | list[float]
@@ -40,7 +62,7 @@ def ensure_safe_goal_position(
 
     return safe_goal_pos
 
-class RevobotManipulatorRobot:
+class MobileRevobotManipulatorRobot:
     # TODO(rcadene): Implement force feedback
     """This class allows to control any manipulator robot of various number of motors.
     
@@ -48,12 +70,17 @@ class RevobotManipulatorRobot:
 
     def __init__(
         self,
-        config: RevobotManipulatorRobotConfig,
+        config: MobileRevobotRobotConfig,
     ):
+        self.robot_type = config.type
         self.config = config
-        self.robot_type = self.config.type
+        self.remote_ip = config.ip
+        self.remote_port = config.port
+        self.remote_port_video = config.video_port
         self.calibration_dir = Path(self.config.calibration_dir)
-        self.cameras = make_cameras_from_configs(self.config.cameras)
+        self.logs = {}
+        
+        self.teleop_keys = self.config.teleop_keys
         
         self.leader_robot_type = self.config.leader_robot_type
         
@@ -71,9 +98,21 @@ class RevobotManipulatorRobot:
         else:
             self.follower_arms = make_motors_buses_from_configs(self.config.follower_arms)
         
+        
+        self.cameras = make_cameras_from_configs(self.config.cameras)
         self.is_connected = False
-        self.logs = {}
+        
+        self.last_frames = {}
+        self.last_present_speed = {}
+        self.last_remote_arm_state = torch.zeros(6, dtype=torch.float32)
 
+
+        # ZeroMQ context and sockets.
+        self.context = None
+        self.cmd_socket = None
+        self.video_socket = None
+
+    
     def get_motor_names(self, arm: dict[str, MotorsBus]) -> list:
         return [f"{arm}_{motor}" for arm, bus in arm.items() for motor in bus.motors]
 
@@ -193,9 +232,16 @@ class RevobotManipulatorRobot:
         for name in self.leader_arms:
             self.leader_arms[name].read("Present_Position")
 
-        # Connect the cameras
-        for name in self.cameras:
-            self.cameras[name].connect()
+        # Set up ZeroMQ sockets to communicate with the remote mobile robot.
+        self.context = zmq.Context()
+
+        self.video_socket = self.context.socket(zmq.PULL)
+        video_connection = f"tcp://{self.remote_ip}:{self.remote_port_video}"
+        self.video_socket.connect(video_connection)
+        self.video_socket.setsockopt(zmq.CONFLATE, 1)
+        print(
+            f"[INFO] Connected to video stream at {video_connection}."
+        )
 
         self.is_connected = True
 
@@ -357,6 +403,61 @@ class RevobotManipulatorRobot:
             # the motors. Note: this configuration is not in the official STS3215 Memory Table
             self.follower_arms[name].write("Maximum_Acceleration", 254)
             self.follower_arms[name].write("Acceleration", 254)
+    
+    
+    def _get_data(self):
+        """
+        Polls the video socket for up to 15 ms. If data arrives, decode only
+        the *latest* message, returning frames from cameras. If nothing arrives,
+        reuse the last known frames.
+        """
+        frames = {}
+    
+        # Poll up to 15 ms
+        poller = zmq.Poller()
+        poller.register(self.video_socket, zmq.POLLIN)
+        socks = dict(poller.poll(15))
+        if self.video_socket not in socks or socks[self.video_socket] != zmq.POLLIN:
+            # No new data → reuse old frames
+            return self.last_frames
+    
+        # Drain all messages, keep only the last
+        last_msg = None
+        while True:
+            try:
+                obs_string = self.video_socket.recv_string(zmq.NOBLOCK)
+                last_msg = obs_string
+            except zmq.Again:
+                break
+    
+        if not last_msg:
+            return self.last_frames
+    
+        # Decode only the final message
+        try:
+            observation = json.loads(last_msg)
+            images_dict = observation.get("images", {})
+    
+            for cam_name, image_b64 in images_dict.items():
+                if image_b64:
+                    jpg_data = base64.b64decode(image_b64)
+                    np_arr = np.frombuffer(jpg_data, dtype=np.uint8)
+                    frame_candidate = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                    if frame_candidate is not None:
+                        frames[cam_name] = frame_candidate
+    
+            # Update the last known frames
+            if frames:
+                self.last_frames = frames
+            else:
+                frames = self.last_frames
+    
+        except Exception as e:
+            print(f"[DEBUG] Error decoding video message: {e}")
+            frames = self.last_frames
+    
+        return frames
+
 
     def teleop_step(
         self, record_data=False
@@ -397,6 +498,8 @@ class RevobotManipulatorRobot:
         # Early exit when recording data is not requested
         if not record_data:
             return
+        
+        obs_dict = self.capture_observation()
 
         # TODO(rcadene): Add velocity and other info
         # Read follower position
@@ -407,12 +510,6 @@ class RevobotManipulatorRobot:
             follower_pos[name] = torch.from_numpy(follower_pos[name])
             self.logs[f"read_follower_{name}_pos_dt_s"] = time.perf_counter() - before_fread_t
 
-        # Create state by concatenating follower current position
-        state = []
-        for name in self.follower_arms:
-            if name in follower_pos:
-                state.append(follower_pos[name])
-        state = torch.cat(state)
 
         # Create action by concatenating follower goal position
         action = []
@@ -421,22 +518,11 @@ class RevobotManipulatorRobot:
                 action.append(follower_goal_pos[name])
         action = torch.cat(action)
 
-        # Capture images from cameras
-        images = {}
-        for name in self.cameras:
-            before_camread_t = time.perf_counter()
-            images[name] = self.cameras[name].async_read()
-            images[name] = torch.from_numpy(images[name])
-            self.logs[f"read_camera_{name}_dt_s"] = self.cameras[name].logs["delta_timestamp_s"]
-            self.logs[f"async_read_camera_{name}_dt_s"] = time.perf_counter() - before_camread_t
-
+      
         # Populate output dictionaries
-        obs_dict, action_dict = {}, {}
-        obs_dict["observation.state"] = state
+        action_dict = {}
         action_dict["action"] = action
-        for name in self.cameras:
-            obs_dict[f"observation.images.{name}"] = images[name]
-
+        
         return obs_dict, action_dict
 
     def capture_observation(self):
@@ -446,6 +532,8 @@ class RevobotManipulatorRobot:
                 "ManipulatorRobot is not connected. You need to run `robot.connect()`."
             )
 
+        frames = self._get_data()
+        
         # Read follower position
         follower_pos = {}
         for name in self.follower_arms:
@@ -461,20 +549,19 @@ class RevobotManipulatorRobot:
                 state.append(follower_pos[name])
         state = torch.cat(state)
 
-        # Capture images from cameras
-        images = {}
-        for name in self.cameras:
-            before_camread_t = time.perf_counter()
-            images[name] = self.cameras[name].async_read()
-            images[name] = torch.from_numpy(images[name])
-            self.logs[f"read_camera_{name}_dt_s"] = self.cameras[name].logs["delta_timestamp_s"]
-            self.logs[f"async_read_camera_{name}_dt_s"] = time.perf_counter() - before_camread_t
-
         # Populate output dictionaries and format to pytorch
         obs_dict = {}
         obs_dict["observation.state"] = state
-        for name in self.cameras:
-            obs_dict[f"observation.images.{name}"] = images[name]
+        
+        
+        # Loop over each configured camera
+        for cam_name, cam in self.cameras.items():
+            frame = frames.get(cam_name, None)
+            if frame is None:
+                # Create a black image using the camera's configured width, height, and channels
+                frame = np.zeros((cam.height, cam.width, cam.channels), dtype=np.uint8)
+            obs_dict[f"observation.images.{cam_name}"] = torch.from_numpy(frame)
+
         return obs_dict
 
     def send_action(self, action: torch.Tensor) -> torch.Tensor:
