@@ -32,6 +32,7 @@ from lerobot.common.robot_devices.robots.configs import (
     So101RobotConfig,
     StretchRobotConfig,
     RevobotRobotConfig,
+    MobileRevobotRobotConfig
 )
 
 
@@ -74,6 +75,8 @@ def make_robot_config(robot_type: str, **kwargs) -> RobotConfig:
         return LeKiwiRobotConfig(**kwargs)
     elif robot_type == "revobot":
         return RevobotRobotConfig(**kwargs)
+    elif robot_type == "mobile_revobot":
+        return MobileRevobotRobotConfig(**kwargs)
     else:
         raise ValueError(f"Robot type '{robot_type}' is not available.")
 
@@ -91,6 +94,10 @@ def make_robot_from_config(config: RobotConfig):
         from lerobot.common.robot_devices.robots.revobot_manipulator import RevobotManipulatorRobot
 
         return RevobotManipulatorRobot(config)
+    elif isinstance(config, MobileRevobotRobotConfig):
+        from lerobot.common.robot_devices.robots.revobot_mobile_manipulator import MobileRevobotManipulator
+
+        return MobileRevobotManipulator(config)
     else:
         from lerobot.common.robot_devices.robots.stretch import StretchRobot
 

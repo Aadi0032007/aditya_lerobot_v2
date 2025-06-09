@@ -62,7 +62,7 @@ def ensure_safe_goal_position(
 
     return safe_goal_pos
 
-class MobileRevobotManipulatorRobot:
+class MobileRevobotManipulator:
     # TODO(rcadene): Implement force feedback
     """This class allows to control any manipulator robot of various number of motors.
     
