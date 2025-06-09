@@ -81,16 +81,10 @@ def run_revobot(robot_config):
                     msg = cmd_socket.recv_string(zmq.NOBLOCK)
                 except zmq.Again:
                     break
-                
-                try:
-                    data = json.load(msg)
-                except Exception as e:
-                    print(f"[ERROR] Parsing message failed: {e}")
             
             # Watchdog: stop the robot if no command is received for over 0.5 seconds.
             now = time.time()
             if now - last_cmd_time > 0.5:
-                robot.stop()
                 last_cmd_time = now
                 
             # Get the latest camera images.
@@ -103,7 +97,6 @@ def run_revobot(robot_config):
             }
             # Send the observation over the video socket.
             video_socket.send_string(json.dumps(observation))
-            print("image sending")
             
             # Ensure a short sleep to avoid overloading the CPU.
             elapsed = time.time() - loop_start_time

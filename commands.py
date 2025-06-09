@@ -8,7 +8,7 @@ Created on Tue May 13 01:01:31 2025
 
 
 python lerobot/scripts/control_robot.py \
-  --robot.type=revobots \
+  --robot.type=revobot \
   --control.type=teleoperate \
   --control.display_data=true
   
@@ -37,6 +37,17 @@ python lerobot/scripts/train.py \
     --policy.device=cuda
 
 
+python lerobot/scripts/control_robot.py \
+    --robot.type=mobile_revobot \  
+    --control.type=remote_revobot \
+    --control.viewer_ip=192.168.0.96 \
+    --control.viewer_port=1234
+    
+python lerobot/scripts/control_robot.py \
+    --robot.type=mobile_revobot  \
+    --control.type=teleoperate \
+    --control.fps=30 \
+    --control.display_data=true
 
   
   
