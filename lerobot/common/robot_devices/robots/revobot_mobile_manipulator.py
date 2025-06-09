@@ -75,6 +75,7 @@ class MobileRevobotManipulator:
         self.robot_type = config.type
         self.config = config
         self.remote_ip = config.ip
+        self.remote_port = config.port
         self.remote_port_video = config.video_port
         self.calibration_dir = Path(self.config.calibration_dir)
         self.logs = {}
@@ -230,7 +231,10 @@ class MobileRevobotManipulator:
 
         # Set up ZeroMQ sockets to communicate with the remote mobile robot.
         self.context = zmq.Context()
-
+        self.cmd_socket = self.context.socket(zmq.PUSH)
+        connection_string = f"tcp://{self.remote_ip}:{self.remote_port}"
+        self.cmd_socket.connect(connection_string)
+        self.cmd_socket.setsockopt(zmq.CONFLATE, 1)
         self.video_socket = self.context.socket(zmq.PULL)
         video_connection = f"tcp://{self.remote_ip}:{self.remote_port_video}"
         self.video_socket.connect(video_connection)
@@ -491,6 +495,9 @@ class MobileRevobotManipulator:
             self.follower_arms[name].write("Goal_Position", goal_pos)
             self.logs[f"write_follower_{name}_goal_pos_dt_s"] = time.perf_counter() - before_fwrite_t
 
+
+        message = {"raw_velocity": None, "arm_positions": None}
+        self.cmd_socket.send_string(json.dumps(message))
         # Early exit when recording data is not requested
         if not record_data:
             return

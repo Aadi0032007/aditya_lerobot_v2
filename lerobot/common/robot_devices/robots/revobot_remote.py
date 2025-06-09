@@ -16,12 +16,15 @@ import zmq
 
 def setup_zmq_sockets(config):
     context = zmq.Context()
+    cmd_socket = context.socket(zmq.PULL)
+    cmd_socket.setsockopt(zmq.CONFLATE, 1)
+    cmd_socket.bind(f"tcp://*:{config.port}")
 
     video_socket = context.socket(zmq.PUSH)
     video_socket.setsockopt(zmq.CONFLATE, 1)
     video_socket.bind(f"tcp://*:{config.video_port}")
 
-    return context, video_socket
+    return context, cmd_socket, video_socket
 
 
 def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
@@ -56,7 +59,7 @@ def run_revobot(robot_config):
 
 
     # Set up ZeroMQ sockets.
-    context, video_socket = setup_zmq_sockets(robot_config)
+    context, cmd_socket, video_socket = setup_zmq_sockets(robot_config)
 
     # Start the camera capture thread.
     latest_images_dict = {}
@@ -72,7 +75,24 @@ def run_revobot(robot_config):
 
     try:
         while True:
-
+            loop_start_time = time.time()
+            while True:
+                try:
+                    msg = cmd_socket.recv_string(zmq.NOBLOCK)
+                except zmq.Again:
+                    break
+                
+                try:
+                    data = json.load(msg)
+                except Exception as e:
+                    print(f"[ERROR] Parsing message failed: {e}")
+            
+            # Watchdog: stop the robot if no command is received for over 0.5 seconds.
+            now = time.time()
+            if now - last_cmd_time > 0.5:
+                robot.stop()
+                last_cmd_time = now
+                
             # Get the latest camera images.
             with images_lock:
                 images_dict_copy = dict(latest_images_dict)
@@ -84,11 +104,18 @@ def run_revobot(robot_config):
             # Send the observation over the video socket.
             video_socket.send_string(json.dumps(observation))
             print("image sending")
+            
+            # Ensure a short sleep to avoid overloading the CPU.
+            elapsed = time.time() - loop_start_time
+            time.sleep(
+                max(0.033 - elapsed, 0)
+            ) 
 
     except KeyboardInterrupt:
         print("Shutting down Revobot server.")
     finally:
         stop_event.set()
         cam_thread.join()
+        cmd_socket.close()
         video_socket.close()
         context.term()

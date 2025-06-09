@@ -852,7 +852,8 @@ class MobileRevobotRobotConfig(RobotConfig):
 
     # Network Configuration
     ip: str = "192.168.0.193"
-    video_port: int = 60000
+    port: int = 5555
+    video_port: int = 5556
 
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
