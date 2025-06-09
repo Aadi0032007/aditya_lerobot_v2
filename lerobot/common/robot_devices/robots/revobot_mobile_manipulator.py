@@ -75,12 +75,10 @@ class MobileRevobotManipulator:
         self.robot_type = config.type
         self.config = config
         self.remote_ip = config.ip
-        self.remote_port = config.port
         self.remote_port_video = config.video_port
         self.calibration_dir = Path(self.config.calibration_dir)
         self.logs = {}
         
-        self.teleop_keys = self.config.teleop_keys
         
         self.leader_robot_type = self.config.leader_robot_type
         
@@ -103,8 +101,6 @@ class MobileRevobotManipulator:
         self.is_connected = False
         
         self.last_frames = {}
-        self.last_present_speed = {}
-        self.last_remote_arm_state = torch.zeros(6, dtype=torch.float32)
 
 
         # ZeroMQ context and sockets.

@@ -56,7 +56,7 @@ def run_revobot(robot_config):
 
 
     # Set up ZeroMQ sockets.
-    context, cmd_socket, video_socket = setup_zmq_sockets(robot_config)
+    context, video_socket = setup_zmq_sockets(robot_config)
 
     # Start the camera capture thread.
     latest_images_dict = {}
@@ -72,20 +72,6 @@ def run_revobot(robot_config):
 
     try:
         while True:
-            loop_start_time = time.time()
-
-            # Process incoming commands (non-blocking).
-            while True:
-                try:
-                    msg = cmd_socket.recv_string(zmq.NOBLOCK)
-                except zmq.Again:
-                    break
-            
-
-            # Watchdog: stop the robot if no command is received for over 0.5 seconds.
-            now = time.time()
-            if now - last_cmd_time > 0.5:
-                last_cmd_time = now
 
             # Get the latest camera images.
             with images_lock:
@@ -97,17 +83,12 @@ def run_revobot(robot_config):
             }
             # Send the observation over the video socket.
             video_socket.send_string(json.dumps(observation))
+            print("image sending")
 
-            # Ensure a short sleep to avoid overloading the CPU.
-            elapsed = time.time() - loop_start_time
-            # time.sleep(
-            #     max(0.033 - elapsed, 0)
-            # )  # If robot jitters increase the sleep and monitor cpu load with `top` in cmd
     except KeyboardInterrupt:
         print("Shutting down Revobot server.")
     finally:
         stop_event.set()
         cam_thread.join()
-        cmd_socket.close()
         video_socket.close()
         context.term()

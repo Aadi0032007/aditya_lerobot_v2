@@ -768,25 +768,25 @@ class RevobotRobotConfig(RevobotManipulatorRobotConfig):
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
             "phone": OpenCVCameraConfig(
-                camera_index=2,
+                camera_index=7,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_1": OpenCVCameraConfig(
-                camera_index=8,
+                camera_index=12,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_2": OpenCVCameraConfig(
-                camera_index=10,
+                camera_index=0,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_3": OpenCVCameraConfig(
-                camera_index=0,
+                camera_index=4,
                 fps=30,
                 width=640,
                 height=480,
@@ -852,7 +852,7 @@ class MobileRevobotRobotConfig(RobotConfig):
 
     # Network Configuration
     ip: str = "192.168.0.193"
-    video_port: int = 5556
+    video_port: int = 60000
 
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
@@ -900,25 +900,25 @@ class MobileRevobotRobotConfig(RobotConfig):
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
             "phone": OpenCVCameraConfig(
-                camera_index=2,
+                camera_index=7,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_1": OpenCVCameraConfig(
-                camera_index=8,
+                camera_index=12,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_2": OpenCVCameraConfig(
-                camera_index=10,
+                camera_index=0,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_3": OpenCVCameraConfig(
-                camera_index=0,
+                camera_index=4,
                 fps=30,
                 width=640,
                 height=480,
