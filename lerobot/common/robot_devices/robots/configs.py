@@ -906,12 +906,12 @@ class MobileRevobotRobotConfig(RobotConfig):
                 width=640,
                 height=480,
             ),
-            "wrist_1": OpenCVCameraConfig(
-                camera_index=6,
-                fps=30,
-                width=640,
-                height=480,
-            ),
+            # "wrist_1": OpenCVCameraConfig(
+            #     camera_index=6,
+            #     fps=30,
+            #     width=640,
+            #     height=480,
+            # ),
             "wrist_2": OpenCVCameraConfig(
                 camera_index=8,
                 fps=30,
