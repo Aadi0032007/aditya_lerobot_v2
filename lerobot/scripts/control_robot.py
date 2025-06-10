@@ -165,10 +165,6 @@ from lerobot.common.robot_devices.robots.utils import Robot, make_robot_from_con
 from lerobot.common.robot_devices.utils import busy_wait, safe_disconnect
 from lerobot.common.utils.utils import has_method, init_logging, log_say
 from lerobot.configs import parser
-from pynput.keyboard import Key, Listener
-import numpy as np
-import cv2
-import math
 
 
 ########################################################################################

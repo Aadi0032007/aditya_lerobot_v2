@@ -851,7 +851,7 @@ class MobileRevobotRobotConfig(RobotConfig):
     max_relative_target: int | None = None
 
     # Network Configuration
-    ip: str = "192.168.0.96"
+    ip: str = "192.168.0.51"
     port: int = 5555
     video_port: int = 5556
 
@@ -901,25 +901,25 @@ class MobileRevobotRobotConfig(RobotConfig):
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
             "phone": OpenCVCameraConfig(
-                camera_index=7,
-                fps=30,
-                width=640,
-                height=480,
-            ),
-            "wrist_1": OpenCVCameraConfig(
-                camera_index=12,
-                fps=30,
-                width=640,
-                height=480,
-            ),
-            "wrist_2": OpenCVCameraConfig(
                 camera_index=0,
                 fps=30,
                 width=640,
                 height=480,
             ),
+            "wrist_1": OpenCVCameraConfig(
+                camera_index=6,
+                fps=30,
+                width=640,
+                height=480,
+            ),
+            "wrist_2": OpenCVCameraConfig(
+                camera_index=8,
+                fps=30,
+                width=640,
+                height=480,
+            ),
             "wrist_3": OpenCVCameraConfig(
-                camera_index=4,
+                camera_index=10,
                 fps=30,
                 width=640,
                 height=480,
