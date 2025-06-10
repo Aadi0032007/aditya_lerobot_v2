@@ -21,7 +21,7 @@ python lerobot/scripts/control_robot.py \
     --control.fps=30 \
     --control.repo_id=test \
     --control.tags='["tutorial"]' \
-    --control.warmup_time_s=5 \  
+    --control.warmup_time_s=5 \
     --control.episode_time_s=30 \
     --control.reset_time_s=0 \
     --control.num_episodes=2  \
@@ -48,6 +48,19 @@ python lerobot/scripts/control_robot.py \
     --control.type=teleoperate \
     --control.fps=30 \
     --control.display_data=true
+    
+python lerobot/scripts/control_robot.py \
+    --robot.type=mobile_revobot  \
+    --control.type=record \
+    --control.single_task="Test the remote system."  \
+    --control.fps=30 \
+    --control.repo_id=test_remote \
+    --control.tags='["tutorial"]' \
+    --control.warmup_time_s=5 \
+    --control.episode_time_s=30 \
+    --control.reset_time_s=0 \
+    --control.num_episodes=2  \
+    --control.push_to_hub=false
 
   
   

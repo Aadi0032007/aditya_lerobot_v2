@@ -628,8 +628,18 @@ class MobileRevobotManipulator:
             self.follower_arms[name].disconnect()
         for name in self.leader_arms:
             self.leader_arms[name].disconnect()
-        for name in self.cameras:
-            self.cameras[name].disconnect()
+        
+
+        if self.cmd_socket:
+            self.cmd_socket.close()
+        if self.video_socket:
+            self.video_socket.close()
+        if self.context:
+            self.context.term()
+        if PYNPUT_AVAILABLE:
+            self.listener.stop()
+        self.is_connected = False
+        print("[INFO] Disconnected from remote robot.")
 
         self.is_connected = False
 
