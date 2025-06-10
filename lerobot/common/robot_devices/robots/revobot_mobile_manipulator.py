@@ -616,12 +616,14 @@ class MobileRevobotManipulator:
             raise RobotDeviceNotConnectedError(
                 "ManipulatorRobot is not connected. You need to run `robot.connect()` before disconnecting."
             )
-        from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
+
         for name in self.follower_arms:
             if self.use_revobot_follower == False:
+                from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
                 self.follower_arms[name].write("Torque_Enable", TorqueMode.DISABLED.value)
         for name in self.leader_arms:
             if self.use_revobot_leader == False:
+                from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
                 self.leader_arms[name].write("Torque_Enable", TorqueMode.DISABLED.value)
 
         for name in self.follower_arms:
@@ -636,8 +638,6 @@ class MobileRevobotManipulator:
             self.video_socket.close()
         if self.context:
             self.context.term()
-        if PYNPUT_AVAILABLE:
-            self.listener.stop()
         self.is_connected = False
         print("[INFO] Disconnected from remote robot.")
 
