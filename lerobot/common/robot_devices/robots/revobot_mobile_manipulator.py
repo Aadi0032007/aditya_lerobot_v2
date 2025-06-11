@@ -506,7 +506,7 @@ class MobileRevobotManipulator:
             follower_goal_pos[name] = goal_pos
 
             goal_pos = goal_pos.numpy().astype(np.float32)
-            # self.follower_arms[name].write("Goal_Position", goal_pos)
+            self.follower_arms[name].write("Goal_Position", goal_pos)
             elapsed = time.time() - before_fwrite_t  # --- TIMING ---
             # print(f"[TIME][teleop_step] Write follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
             self.logs[f"write_follower_{name}_goal_pos_dt_s"] = elapsed
@@ -542,9 +542,9 @@ class MobileRevobotManipulator:
         frames = self._get_data()
 
         follower_pos = {}
-        for name in self.leader_arms:
+        for name in self.follower_arms:
             before_fread_t = time.time()  # --- TIMING ---
-            follower_pos[name] = self.leader_arms[name].read("Present_Position")
+            follower_pos[name] = self.follower_arms[name].read("Present_Position")
             follower_pos[name] = torch.from_numpy(follower_pos[name])
             elapsed = time.time() - before_fread_t  # --- TIMING ---
             # print(f"[TIME][capture_observation] Read follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
