@@ -175,7 +175,7 @@ class RevobotMotorsBus:
                 continue  # Retry sending command after reconnecting
     
             try:
-                recv_data = self.sock.recv(1024)
+                recv_data = self.sock.recv(240)
                 recvBytes = len(recv_data)
             except Exception:
                 pass
