@@ -174,17 +174,17 @@ class RevobotMotorsBus:
                 maxRetries -= 1
                 continue  # Retry sending command after reconnecting
             
-            if command == "xxx xxx xxx xxx g;":
-                try:
-                    recv_data = self.sock.recv(240)
-                    recvBytes = len(recv_data)
-                except Exception:
-                    pass
-        
-                if recvBytes == 0:  # If no data received, attempt reconnect
-                    # print("No data received, attempting to reconnect...")
-                    self.reconnect()
-        
+            # if command == "xxx xxx xxx xxx g;":
+            try:
+                recv_data = self.sock.recv(240)
+                recvBytes = len(recv_data)
+            except Exception:
+                pass
+    
+            if recvBytes == 0:  # If no data received, attempt reconnect
+                # print("No data received, attempting to reconnect...")
+                self.reconnect()
+    
             maxRetries -= 1
             
         if command == "xxx xxx xxx xxx g;":
