@@ -173,34 +173,36 @@ class RevobotMotorsBus:
                 self.reconnect()  # Try reconnecting instead of disconnecting
                 maxRetries -= 1
                 continue  # Retry sending command after reconnecting
-    
-            try:
-                recv_data = self.sock.recv(240)
-                recvBytes = len(recv_data)
-            except Exception:
-                pass
-    
-            if recvBytes == 0:  # If no data received, attempt reconnect
-                # print("No data received, attempting to reconnect...")
-                self.reconnect()
-    
-            maxRetries -= 1
-
-        if recvBytes == 0:
-            print("Failed to receive data after multiple attempts.")
-            return -1
             
-        self.robotDataList = self.parse_partial_robot_data_and_ignore_first(recv_data)
+            if command == "xxx xxx xxx xxx g;":
+                try:
+                    recv_data = self.sock.recv(240)
+                    recvBytes = len(recv_data)
+                except Exception:
+                    pass
         
-        self.joint67Status = Joint67Status(
-            j6Position = self.robotDataList[3].joint67Data,
-            j6Torque   = self.robotDataList[4].joint67Data,
-            j7Position = self.robotDataList[1].joint67Data,
-            j7Torque   = self.robotDataList[2].joint67Data
-        )
+                if recvBytes == 0:  # If no data received, attempt reconnect
+                    # print("No data received, attempting to reconnect...")
+                    self.reconnect()
         
-        # print(self.robotDataList)
-        # print("Updated joint67Status:", self.joint67Status)
+                maxRetries -= 1
+            
+        if command == "xxx xxx xxx xxx g;":
+            if recvBytes == 0:
+                print("Failed to receive data after multiple attempts.")
+                return -1
+                
+            self.robotDataList = self.parse_partial_robot_data_and_ignore_first(recv_data)
+            
+            self.joint67Status = Joint67Status(
+                j6Position = self.robotDataList[3].joint67Data,
+                j6Torque   = self.robotDataList[4].joint67Data,
+                j7Position = self.robotDataList[1].joint67Data,
+                j7Torque   = self.robotDataList[2].joint67Data
+            )
+            
+            # print(self.robotDataList)
+            # print("Updated joint67Status:", self.joint67Status)
         return bytesWritten
 
 
