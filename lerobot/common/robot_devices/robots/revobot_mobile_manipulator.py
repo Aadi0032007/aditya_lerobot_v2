@@ -521,15 +521,6 @@ class MobileRevobotManipulator:
 
         obs_dict = self.capture_observation()
 
-        follower_pos = {}
-        for name in self.follower_arms:
-            before_fread_t = time.time()  # --- TIMING ---
-            follower_pos[name] = self.follower_arms[name].read("Present_Position")
-            follower_pos[name] = torch.from_numpy(follower_pos[name])
-            elapsed = time.time() - before_fread_t  # --- TIMING ---
-            print(f"[TIME][teleop_step] Read follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
-            self.logs[f"read_follower_{name}_pos_dt_s"] = elapsed
-
         action = []
         for name in self.follower_arms:
             if name in follower_goal_pos:
