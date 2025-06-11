@@ -389,7 +389,7 @@ def _init_rerun(control_config: ControlConfig, session_name: str = "Aditya_contr
         control_config.display_data and isinstance(control_config, RemoteRobotConfig)
     ):
         # Configure Rerun flush batch size default to 8KB if not set
-        batch_size = os.getenv("RERUN_FLUSH_NUM_BYTES", "8000")
+        batch_size = os.getenv("RERUN_FLUSH_NUM_BYTES", "32000")
         os.environ["RERUN_FLUSH_NUM_BYTES"] = batch_size
 
         # Initialize Rerun based on configuration
@@ -405,7 +405,7 @@ def _init_rerun(control_config: ControlConfig, session_name: str = "Aditya_contr
             rr.connect_tcp(f"{viewer_ip}:{viewer_port}")
         else:
             # Get memory limit for rerun viewer parameters
-            memory_limit = os.getenv("LEROBOT_RERUN_MEMORY_LIMIT", "10%")
+            memory_limit = os.getenv("LEROBOT_RERUN_MEMORY_LIMIT", "80%")
             rr.spawn(memory_limit=memory_limit)
 
 
