@@ -47,6 +47,7 @@ def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
 
         with images_lock:
             latest_images_dict.update(local_dict)
+        time.sleep(0.005)
 
 
 def run_revobot(robot_config):
@@ -117,8 +118,8 @@ def run_revobot(robot_config):
             print("")
             print("")
             
-            
-            # time.sleep(max(0.033 - loop_elapsed, 0))
+            print(max(0.033 - loop_elapsed, 0))
+            time.sleep(max(0.033 - loop_elapsed, 0))
 
     except KeyboardInterrupt:
         print("Shutting down Revobot server.")

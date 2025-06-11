@@ -411,16 +411,21 @@ class MobileRevobotManipulator:
         the *latest* message, returning frames from cameras. If nothing arrives,
         reuse the last known frames.
         """
+        
+        start_time = time.perf_counter()  # --- TIMING ---
+        
         frames = {}
-    
+       
+        
         # Poll up to 15 ms
         poller = zmq.Poller()
         poller.register(self.video_socket, zmq.POLLIN)
         socks = dict(poller.poll(15))
         if self.video_socket not in socks or socks[self.video_socket] != zmq.POLLIN:
+            print(f"[TIME][get_data] No new data. Time: {time.perf_counter() - start_time:.4f}s")  # --- TIMING ---
             # No new data → reuse old frames
             return self.last_frames
-    
+        
         # Drain all messages, keep only the last
         last_msg = None
         while True:
@@ -429,15 +434,16 @@ class MobileRevobotManipulator:
                 last_msg = obs_string
             except zmq.Again:
                 break
-    
+            
         if not last_msg:
+            print(f"[TIME][get_data] No message. Time: {time.perf_counter() - start_time:.4f}s")  # --- TIMING ---
             return self.last_frames
-    
+        
         # Decode only the final message
         try:
             observation = json.loads(last_msg)
             images_dict = observation.get("images", {})
-    
+            
             for cam_name, image_b64 in images_dict.items():
                 if image_b64:
                     jpg_data = base64.b64decode(image_b64)
@@ -445,126 +451,128 @@ class MobileRevobotManipulator:
                     frame_candidate = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                     if frame_candidate is not None:
                         frames[cam_name] = frame_candidate
-    
+            
             # Update the last known frames
             if frames:
                 self.last_frames = frames
             else:
                 frames = self.last_frames
-    
+                
         except Exception as e:
             print(f"[DEBUG] Error decoding video message: {e}")
             frames = self.last_frames
-    
+        print(f"[TIME][get_data] Completed in {time.perf_counter() - start_time:.4f}s")  # --- TIMING ---
         return frames
 
 
     def teleop_step(
         self, record_data=False
     ) -> None | tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        step_start = time.perf_counter()  # --- TIMING ---
         if not self.is_connected:
-            raise RobotDeviceNotConnectedError(
-                "ManipulatorRobot is not connected. You need to run `robot.connect()`."
-            )
-
+            raise RobotDeviceNotConnectedError("ManipulatorRobot is not connected. You need to run `robot.connect()`.")
+        
+        
         # Prepare to assign the position of the leader to the follower
         leader_pos = {}
         for name in self.leader_arms:
-            before_lread_t = time.perf_counter()
+            before_lread_t = time.perf_counter()  # --- TIMING ---
             leader_pos[name] = self.leader_arms[name].read("Present_Position")
             leader_pos[name] = torch.from_numpy(leader_pos[name])
             self.logs[f"read_leader_{name}_pos_dt_s"] = time.perf_counter() - before_lread_t
-
+        
         # Send goal position to the follower
         follower_goal_pos = {}
         for name in self.follower_arms:
-            before_fwrite_t = time.perf_counter()
+            before_fwrite_t = time.perf_counter()  # --- TIMING ---
             goal_pos = leader_pos[name]
-
+            
             # Cap goal position when too far away from present position.
             # Slower fps expected due to reading from the follower.
             if self.config.max_relative_target is not None:
                 present_pos = self.follower_arms[name].read("Present_Position")
                 present_pos = torch.from_numpy(present_pos)
                 goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
-
+            
             # Used when record_data=True
             follower_goal_pos[name] = goal_pos
-
+            
             goal_pos = goal_pos.numpy().astype(np.float32)
             self.follower_arms[name].write("Goal_Position", goal_pos)
             self.logs[f"write_follower_{name}_goal_pos_dt_s"] = time.perf_counter() - before_fwrite_t
-
-
+       
         message = {"raw_velocity": None, "arm_positions": None}
         self.cmd_socket.send_string(json.dumps(message))
-        # Early exit when recording data is not requested
         if not record_data:
+            print(f"[TIME][teleop_step] Completed in {time.perf_counter() - step_start:.4f}s")  # --- TIMING ---
             return
         
         obs_dict = self.capture_observation()
-
+        
         # TODO(rcadene): Add velocity and other info
         # Read follower position
         follower_pos = {}
         for name in self.follower_arms:
-            before_fread_t = time.perf_counter()
+            before_fread_t = time.perf_counter()  # --- TIMING ---
             follower_pos[name] = self.follower_arms[name].read("Present_Position")
             follower_pos[name] = torch.from_numpy(follower_pos[name])
             self.logs[f"read_follower_{name}_pos_dt_s"] = time.perf_counter() - before_fread_t
-
-
+        
         # Create action by concatenating follower goal position
+        action = []
         action = []
         for name in self.follower_arms:
             if name in follower_goal_pos:
                 action.append(follower_goal_pos[name])
         action = torch.cat(action)
-
-      
+        
+        
         # Populate output dictionaries
         action_dict = {}
-        action_dict["action"] = action
+        action_dict = {"action": action}
+        print(f"[TIME][teleop_step] Completed in {time.perf_counter() - step_start:.4f}s")  # --- TIMING ---
         
         return obs_dict, action_dict
 
-    def capture_observation(self):
-        """The returned observations do not have a batch dimension."""
-        if not self.is_connected:
-            raise RobotDeviceNotConnectedError(
-                "ManipulatorRobot is not connected. You need to run `robot.connect()`."
-            )
 
+
+    def capture_observation(self):
+        
+        obs_start = time.perf_counter()  # --- TIMING ---
+        
+        if not self.is_connected:
+            raise RobotDeviceNotConnectedError("ManipulatorRobot is not connected. You need to run `robot.connect()`.")
+        
         frames = self._get_data()
         
         # Read follower position
         follower_pos = {}
         for name in self.follower_arms:
-            before_fread_t = time.perf_counter()
+            before_fread_t = time.perf_counter()  # --- TIMING ---
             follower_pos[name] = self.follower_arms[name].read("Present_Position")
             follower_pos[name] = torch.from_numpy(follower_pos[name])
             self.logs[f"read_follower_{name}_pos_dt_s"] = time.perf_counter() - before_fread_t
-
+        
+        
         # Create state by concatenating follower current position
         state = []
         for name in self.follower_arms:
             if name in follower_pos:
                 state.append(follower_pos[name])
         state = torch.cat(state)
-
+        
         # Populate output dictionaries and format to pytorch
         obs_dict = {}
         obs_dict["observation.state"] = state
-        
         
         # Loop over each configured camera
         for cam_name, cam in self.cameras.items():
             frame = frames.get(cam_name, None)
             if frame is None:
-                # Create a black image using the camera's configured width, height, and channels
                 frame = np.zeros((cam.height, cam.width, cam.channels), dtype=np.uint8)
             obs_dict[f"observation.images.{cam_name}"] = torch.from_numpy(frame)
-
+        print(f"[TIME][capture_observation] Completed in {time.perf_counter() - obs_start:.4f}s")  # --- TIMING ---
+        
         return obs_dict
 
     def send_action(self, action: torch.Tensor) -> torch.Tensor:
@@ -577,34 +585,34 @@ class MobileRevobotManipulator:
         Args:
             action: tensor containing the concatenated goal positions for the follower arms.
         """
+        send_start = time.perf_counter()  # --- TIMING ---
         if not self.is_connected:
-            raise RobotDeviceNotConnectedError(
-                "ManipulatorRobot is not connected. You need to run `robot.connect()`."
-            )
-
+            raise RobotDeviceNotConnectedError("ManipulatorRobot is not connected. You need to run `robot.connect()`.")
+       
         from_idx = 0
         to_idx = 0
         action_sent = []
         for name in self.follower_arms:
-            # Get goal position of each follower arm by splitting the action vector
             to_idx += len(self.follower_arms[name].motor_names)
             goal_pos = action[from_idx:to_idx]
             from_idx = to_idx
-
+            
             # Cap goal position when too far away from present position.
             # Slower fps expected due to reading from the follower.
             if self.config.max_relative_target is not None:
                 present_pos = self.follower_arms[name].read("Present_Position")
                 present_pos = torch.from_numpy(present_pos)
                 goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
-
+           
             # Save tensor to concat and return
             action_sent.append(goal_pos)
-
+            
             # Send goal position to each follower
             goal_pos = goal_pos.numpy().astype(np.float32)
             self.follower_arms[name].write("Goal_Position", goal_pos)
-
+            
+        print(f"[TIME][send_action] Completed in {time.perf_counter() - send_start:.4f}s")  # --- TIMING ---
+        
         return torch.cat(action_sent)
 
     def print_logs(self):
