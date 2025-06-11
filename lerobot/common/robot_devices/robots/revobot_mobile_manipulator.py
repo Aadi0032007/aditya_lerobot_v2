@@ -498,10 +498,10 @@ class MobileRevobotManipulator:
             before_fwrite_t = time.time()  # --- TIMING ---
             goal_pos = leader_pos[name]
 
-            if self.config.max_relative_target is not None:
-                present_pos = self.follower_arms[name].read("Present_Position")
-                present_pos = torch.from_numpy(present_pos)
-                goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
+            # if self.config.max_relative_target is not None:
+            #     present_pos = self.follower_arms[name].read("Present_Position")
+            #     present_pos = torch.from_numpy(present_pos)
+            #     goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
 
             follower_goal_pos[name] = goal_pos
 
@@ -512,7 +512,9 @@ class MobileRevobotManipulator:
             self.logs[f"write_follower_{name}_goal_pos_dt_s"] = elapsed
 
         message = {"raw_velocity": None, "arm_positions": None}
+        send_data_time = time.time()
         self.cmd_socket.send_string(json.dumps(message))
+        (f"[ZQM][teleop_step] Sent none json in {time.time() - send_data_time:.4f}s")        
         if not record_data:
             print(f"[TIME][teleop_step] Completed in {time.time() - step_start:.4f}s")  # --- TIMING ---
             return
@@ -593,10 +595,10 @@ class MobileRevobotManipulator:
             goal_pos = action[from_idx:to_idx]
             from_idx = to_idx
 
-            if self.config.max_relative_target is not None:
-                present_pos = self.follower_arms[name].read("Present_Position")
-                present_pos = torch.from_numpy(present_pos)
-                goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
+            # if self.config.max_relative_target is not None:
+            #     present_pos = self.follower_arms[name].read("Present_Position")
+            #     present_pos = torch.from_numpy(present_pos)
+            #     goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
 
             action_sent.append(goal_pos)
             goal_pos = goal_pos.numpy().astype(np.float32)
