@@ -30,17 +30,24 @@ def setup_zmq_sockets(config):
 def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
     while not stop_event.is_set():
         local_dict = {}
+        cam_start_all = time.time()  # --- TIMING ---
         for name, cam in cameras.items():
+            cam_start = time.time()  # --- TIMING ---
             frame = cam.async_read()
+            cam_elapsed = time.time() - cam_start  # --- TIMING ---
+            print(f"[CAMERA] Time to get 1 frame from '{name}': {cam_elapsed:.4f}s")  # --- TIMING ---
+
             ret, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
             if ret:
                 local_dict[name] = base64.b64encode(buffer).decode("utf-8")
             else:
                 local_dict[name] = ""
+        cam_all_elapsed = time.time() - cam_start_all  # --- TIMING ---
+        print(f"[CAMERA] Time to get all camera frames: {cam_all_elapsed:.4f}s")  # --- TIMING ---
+
         with images_lock:
             latest_images_dict.update(local_dict)
         time.sleep(0.01)
-
 
 
 def run_revobot(robot_config):
@@ -49,19 +56,14 @@ def run_revobot(robot_config):
       - Sets up cameras and connects them.
       - Creates ZeroMQ sockets for receiving commands and streaming observations.
     """
-    # Import helper functions and classes
     from lerobot.common.robot_devices.cameras.utils import make_cameras_from_configs
 
-    # Initialize cameras from the robot configuration.
     cameras = make_cameras_from_configs(robot_config.cameras)
     for cam in cameras.values():
         cam.connect()
 
-
-    # Set up ZeroMQ sockets.
     context, cmd_socket, video_socket = setup_zmq_sockets(robot_config)
 
-    # Start the camera capture thread.
     latest_images_dict = {}
     images_lock = threading.Lock()
     stop_event = threading.Event()
@@ -75,34 +77,42 @@ def run_revobot(robot_config):
 
     try:
         while True:
-            loop_start_time = time.time()
+            loop_start_time = time.time()  # --- TIMING ---
+
+            # Time to receive command
+            recv_start = time.time()  # --- TIMING ---
             while True:
                 try:
                     msg = cmd_socket.recv_string(zmq.NOBLOCK)
+                    print(f"[CMD] Received command: {msg}")  # --- TIMING ---
                 except zmq.Again:
                     break
-            
-            # Watchdog: stop the robot if no command is received for over 0.5 seconds.
+            recv_elapsed = time.time() - recv_start  # --- TIMING ---
+            print(f"[ZMQ] Time to receive command: {recv_elapsed:.4f}s")  # --- TIMING ---
+
             now = time.time()
             if now - last_cmd_time > 0.5:
                 last_cmd_time = now
-                
-            # Get the latest camera images.
+
+            # Time to access shared image data
+            image_lock_start = time.time()  # --- TIMING ---
             with images_lock:
                 images_dict_copy = dict(latest_images_dict)
+            image_lock_elapsed = time.time() - image_lock_start  # --- TIMING ---
+            print(f"[LOCK] Time to copy image dict: {image_lock_elapsed:.4f}s")  # --- TIMING ---
 
-            # Build the observation dictionary.
-            observation = {
-                "images": images_dict_copy
-            }
-            # Send the observation over the video socket.
-            video_socket.send_string(json.dumps(observation))
-            
-            # Ensure a short sleep to avoid overloading the CPU.
-            elapsed = time.time() - loop_start_time
-            time.sleep(
-                max(0.033 - elapsed, 0)
-            ) 
+            # Build and send observation
+            obs = {"images": images_dict_copy}
+            send_start = time.time()  # --- TIMING ---
+            video_socket.send_string(json.dumps(obs))
+            send_elapsed = time.time() - send_start  # --- TIMING ---
+            print(f"[ZMQ] Time to send video data: {send_elapsed:.4f}s")  # --- TIMING ---
+
+            # Total loop time
+            loop_elapsed = time.time() - loop_start_time  # --- TIMING ---
+            print(f"[LOOP] Total time for loop iteration: {loop_elapsed:.4f}s\n")  # --- TIMING ---
+
+            time.sleep(max(0.033 - loop_elapsed, 0))
 
     except KeyboardInterrupt:
         print("Shutting down Revobot server.")
