@@ -537,7 +537,7 @@ class MobileRevobotManipulator:
             follower_pos[name] = self.follower_arms[name].read("Present_Position")
             follower_pos[name] = torch.from_numpy(follower_pos[name])
             elapsed = time.time() - before_fread_t  # --- TIMING ---
-            # print(f"[TIME][capture_observation] Read follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
+            print(f"[TIME][capture_observation] Read follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
             self.logs[f"read_follower_{name}_pos_dt_s"] = elapsed
 
         state = []
