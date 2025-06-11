@@ -913,13 +913,13 @@ class MobileRevobotRobotConfig(RobotConfig):
             #     height=480,
             # ),
             "wrist_2": OpenCVCameraConfig(
-                camera_index=8,
+                camera_index=2,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_3": OpenCVCameraConfig(
-                camera_index=10,
+                camera_index=6,
                 fps=30,
                 width=640,
                 height=480,
