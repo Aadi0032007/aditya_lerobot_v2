@@ -47,7 +47,6 @@ def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
 
         with images_lock:
             latest_images_dict.update(local_dict)
-        time.sleep(0.01)
 
 
 def run_revobot(robot_config):
@@ -111,7 +110,14 @@ def run_revobot(robot_config):
             # Total loop time
             loop_elapsed = time.time() - loop_start_time  # --- TIMING ---
             print(f"[LOOP] Total time for loop iteration: {loop_elapsed:.4f}s\n")  # --- TIMING ---
-
+            print("")
+            print("")
+            print("")
+            print("")
+            print("")
+            print("")
+            
+            
             time.sleep(max(0.033 - loop_elapsed, 0))
 
     except KeyboardInterrupt:
