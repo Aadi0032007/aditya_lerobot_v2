@@ -514,7 +514,7 @@ class MobileRevobotManipulator:
         message = {"raw_velocity": None, "arm_positions": None}
         send_data_time = time.time()
         self.cmd_socket.send_string(json.dumps(message))
-        (f"[ZQM][teleop_step] Sent none json in {time.time() - send_data_time:.4f}s")        
+        print(f"[ZQM][teleop_step] Sent none json in {time.time() - send_data_time:.4f}s")        
         if not record_data:
             print(f"[TIME][teleop_step] Completed in {time.time() - step_start:.4f}s")  # --- TIMING ---
             return
