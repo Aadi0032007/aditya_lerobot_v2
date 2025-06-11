@@ -519,6 +519,7 @@ class MobileRevobotManipulator:
 
         action_dict = {"action": action}
         print(f"[TIME][teleop_step] Completed in {time.time() - step_start:.4f}s")  # --- TIMING ---
+        time.sleep(max(0.033 - (time.time() - step_start), 0))
 
         return obs_dict, action_dict
 

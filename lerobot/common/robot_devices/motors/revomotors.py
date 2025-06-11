@@ -150,6 +150,7 @@ class RevobotMotorsBus:
 
 
     def send_command(self, command):
+        start = time.time()
         if self.sock is None or self.sock.fileno() <= 0:
             print("Socket not valid")
             return -1
@@ -166,7 +167,9 @@ class RevobotMotorsBus:
                 print("Attempting to reconnect...")
     
             try:
+                t_sbt = time.time()
                 bytesWritten = self.sock.send(command.encode('utf-8'))
+                print(f"{command} snt in {time.time() - t_sbt:.4f}s")
                 # print("Sending command:", command)
             except Exception as e:
                 print("send_command error:", e)
@@ -174,16 +177,18 @@ class RevobotMotorsBus:
                 maxRetries -= 1
                 continue  # Retry sending command after reconnecting
             
-            # if command == "xxx xxx xxx xxx g;":
-            try:
-                recv_data = self.sock.recv(240)
-                recvBytes = len(recv_data)
-            except Exception:
-                pass
-    
-            if recvBytes == 0:  # If no data received, attempt reconnect
-                # print("No data received, attempting to reconnect...")
-                self.reconnect()
+            if command == "xxx xxx xxx xxx g;":
+                try:
+                    t_rcv = time.time()
+                    recv_data = self.sock.recv(1024)
+                    recvBytes = len(recv_data)
+                    print(f"{command} rcv in {time.time() - t_rcv:.4f}s")
+                except Exception:
+                    pass
+        
+                if recvBytes == 0:  # If no data received, attempt reconnect
+                    # print("No data received, attempting to reconnect...")
+                    self.reconnect()
     
             maxRetries -= 1
             
@@ -203,6 +208,7 @@ class RevobotMotorsBus:
             
             # print(self.robotDataList)
             # print("Updated joint67Status:", self.joint67Status)
+        print(f"{command} complete in {time.time() - start:.4f}s")
         return bytesWritten
 
 

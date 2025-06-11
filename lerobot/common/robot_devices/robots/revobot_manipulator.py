@@ -361,6 +361,7 @@ class RevobotManipulatorRobot:
     def teleop_step(
         self, record_data=False
     ) -> None | tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        start = time.time()
         if not self.is_connected:
             raise RobotDeviceNotConnectedError(
                 "ManipulatorRobot is not connected. You need to run `robot.connect()`."
@@ -380,12 +381,12 @@ class RevobotManipulatorRobot:
             before_fwrite_t = time.perf_counter()
             goal_pos = leader_pos[name]
 
-            # Cap goal position when too far away from present position.
-            # Slower fps expected due to reading from the follower.
-            if self.config.max_relative_target is not None:
-                present_pos = self.follower_arms[name].read("Present_Position")
-                present_pos = torch.from_numpy(present_pos)
-                goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
+            # # Cap goal position when too far away from present position.
+            # # Slower fps expected due to reading from the follower.
+            # if self.config.max_relative_target is not None:
+            #     present_pos = self.follower_arms[name].read("Present_Position")
+            #     present_pos = torch.from_numpy(present_pos)
+            #     goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
 
             # Used when record_data=True
             follower_goal_pos[name] = goal_pos
@@ -437,6 +438,7 @@ class RevobotManipulatorRobot:
         for name in self.cameras:
             obs_dict[f"observation.images.{name}"] = images[name]
 
+        print(f"[TIME][teleop_step] Completed in {time.time() - start:.4f}s")
         return obs_dict, action_dict
 
     def capture_observation(self):
@@ -501,12 +503,12 @@ class RevobotManipulatorRobot:
             goal_pos = action[from_idx:to_idx]
             from_idx = to_idx
 
-            # Cap goal position when too far away from present position.
-            # Slower fps expected due to reading from the follower.
-            if self.config.max_relative_target is not None:
-                present_pos = self.follower_arms[name].read("Present_Position")
-                present_pos = torch.from_numpy(present_pos)
-                goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
+            # # Cap goal position when too far away from present position.
+            # # Slower fps expected due to reading from the follower.
+            # if self.config.max_relative_target is not None:
+            #     present_pos = self.follower_arms[name].read("Present_Position")
+            #     present_pos = torch.from_numpy(present_pos)
+            #     goal_pos = ensure_safe_goal_position(goal_pos, present_pos, self.config.max_relative_target)
 
             # Save tensor to concat and return
             action_sent.append(goal_pos)
