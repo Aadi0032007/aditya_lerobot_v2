@@ -517,9 +517,9 @@ class MobileRevobotManipulator:
                 action.append(follower_goal_pos[name])
         action = torch.cat(action)
 
+        action_dict =  {}
         action_dict = {"action": action}
         print(f"[TIME][teleop_step] Completed in {time.time() - step_start:.4f}s")  # --- TIMING ---
-        time.sleep(max(0.033 - (time.time() - step_start), 0))
 
         return obs_dict, action_dict
 
@@ -547,6 +547,7 @@ class MobileRevobotManipulator:
                 state.append(follower_pos[name])
         state = torch.cat(state)
 
+        obs_dict = {}
         obs_dict = {"observation.state": state}
 
         for cam_name, cam in self.cameras.items():
