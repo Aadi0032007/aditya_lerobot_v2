@@ -35,7 +35,7 @@ def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
             cam_start = time.time()  # --- TIMING ---
             frame = cam.async_read()
             cam_elapsed = time.time() - cam_start  # --- TIMING ---
-            print(f"[CAMERA] Time to get 1 frame from '{name}': {cam_elapsed:.4f}s")  # --- TIMING ---
+            # print(f"[CAMERA] Time to get 1 frame from '{name}': {cam_elapsed:.4f}s")  # --- TIMING ---
 
             ret, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
             if ret:
@@ -43,7 +43,7 @@ def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
             else:
                 local_dict[name] = ""
         cam_all_elapsed = time.time() - cam_start_all  # --- TIMING ---
-        print(f"[CAMERA] Time to get all camera frames: {cam_all_elapsed:.4f}s")  # --- TIMING ---
+        # print(f"[CAMERA] Time to get all camera frames: {cam_all_elapsed:.4f}s")  # --- TIMING ---
 
         with images_lock:
             latest_images_dict.update(local_dict)
@@ -88,7 +88,7 @@ def run_revobot(robot_config):
                 except zmq.Again:
                     break
             recv_elapsed = time.time() - recv_start  # --- TIMING ---
-            print(f"[ZMQ] Time to receive command: {recv_elapsed:.4f}s")  # --- TIMING ---
+            # print(f"[ZMQ] Time to receive command: {recv_elapsed:.4f}s")  # --- TIMING ---
 
             now = time.time()
             if now - last_cmd_time > 0.5:
@@ -99,26 +99,19 @@ def run_revobot(robot_config):
             with images_lock:
                 images_dict_copy = dict(latest_images_dict)
             image_lock_elapsed = time.time() - image_lock_start  # --- TIMING ---
-            print(f"[LOCK] Time to copy image dict: {image_lock_elapsed:.4f}s")  # --- TIMING ---
+            # print(f"[LOCK] Time to copy image dict: {image_lock_elapsed:.4f}s")  # --- TIMING ---
 
             # Build and send observation
             obs = {"images": images_dict_copy}
             send_start = time.time()  # --- TIMING ---
             video_socket.send_string(json.dumps(obs))
             send_elapsed = time.time() - send_start  # --- TIMING ---
-            print(f"[ZMQ] Time to send video data: {send_elapsed:.4f}s")  # --- TIMING ---
+            # print(f"[ZMQ] Time to send video data: {send_elapsed:.4f}s")  # --- TIMING ---
 
             # Total loop time
             loop_elapsed = time.time() - loop_start_time  # --- TIMING ---
-            print(f"[LOOP] Total time for loop iteration: {loop_elapsed:.4f}s\n")  # --- TIMING ---
-            print("")
-            print("")
-            print("")
-            print("")
-            print("")
-            print("")
+            # print(f"[LOOP] Total time for loop iteration: {loop_elapsed:.4f}s\n")  # --- TIMING ---
             
-            print(max(0.033 - loop_elapsed, 0))
             time.sleep(max(0.033 - loop_elapsed, 0))
 
     except KeyboardInterrupt:

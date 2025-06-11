@@ -154,7 +154,7 @@ class RevobotMotorsBus:
             print("Socket not valid")
             return -1
     
-        maxRetries = 5
+        maxRetries = 1
         bytesWritten = 0
         recvBytes = 0
     
@@ -185,7 +185,7 @@ class RevobotMotorsBus:
                     # print("No data received, attempting to reconnect...")
                     self.reconnect()
         
-                maxRetries -= 1
+            maxRetries -= 1
             
         if command == "xxx xxx xxx xxx g;":
             if recvBytes == 0:
@@ -303,16 +303,16 @@ class RevobotMotorsBus:
                 command3 = "xxx xxx xxx xxx S ServoSetX 1 116 12 %"+str(data3)+"%"+str(data4)+"%00%00;"
                 
         command = " ".join(command_parts) + ";"
-        self.send_command(command)
+        # self.send_command(command)
         # # print(command)
-        # if  write_call_counter == 1:
-        #     self.send_command(command2)
-        #     self.send_command(command3)
-        #     if (freeze_flag == 0):
-        #         self.send_command(command)
-        #     write_call_counter = 0
-        # else:
-        #     self.read()
+        if  write_call_counter == 1:
+            self.send_command(command2)
+            self.send_command(command3)
+            if (freeze_flag == 0):
+                self.send_command(command)
+            write_call_counter = 0
+        else:
+            self.read()
         # time.sleep(0.25)
         
        
