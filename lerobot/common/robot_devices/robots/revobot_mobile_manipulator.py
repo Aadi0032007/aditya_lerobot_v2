@@ -479,7 +479,11 @@ class MobileRevobotManipulator:
         step_start = time.perf_counter()  # --- TIMING ---
         if not self.is_connected:
             raise RobotDeviceNotConnectedError("ManipulatorRobot is not connected. You need to run `robot.connect()`.")
-
+        
+        print("")
+        print("")
+        print("")
+        
         leader_pos = {}
         for name in self.leader_arms:
             before_lread_t = time.perf_counter()  # --- TIMING ---
