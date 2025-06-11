@@ -118,7 +118,7 @@ def run_revobot(robot_config):
             print("")
             
             
-            time.sleep(max(0.033 - loop_elapsed, 0))
+            # time.sleep(max(0.033 - loop_elapsed, 0))
 
     except KeyboardInterrupt:
         print("Shutting down Revobot server.")
