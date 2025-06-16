@@ -16,15 +16,22 @@ import os
 import sys
 import cv2
 import torch
-import zmq
 import numpy as np
 import torch
+import socket
+import struct
+import threading
+import  select
 
 from lerobot.common.robot_devices.cameras.utils import make_cameras_from_configs
 from lerobot.common.robot_devices.motors.utils import MotorsBus, make_motors_buses_from_configs
 from lerobot.common.robot_devices.robots.configs import MobileRevobotRobotConfig
 from lerobot.common.robot_devices.robots.utils import get_arm_id
 from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError, RobotDeviceNotConnectedError
+
+
+counter = 0
+print_needed = False
 
 PYNPUT_AVAILABLE = True
 try:
@@ -62,6 +69,82 @@ def ensure_safe_goal_position(
 
     return safe_goal_pos
 
+
+
+class VideoReceiver:
+    def __init__(self, host: str, port: int):
+        # 1) Open socket & disable Nagle
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.sock.connect((host, port))
+        self.sock.setblocking(False)
+
+        # 2) Internal buffer & state
+        self._buffer = b""
+        self._raw = None
+        self._lock = threading.Lock()
+        self._running = True
+
+        # 3) Start reader thread
+        self._thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self._thread.start()
+
+    def _recv_loop(self):
+        while self._running:
+            # Wait up to 10ms for data
+            r,_,_ = select.select([self.sock], [], [], 0.01)
+            if not r:
+                continue
+
+            # Read whatever is available
+            chunk = self.sock.recv(65536)
+            if not chunk:
+                break
+            self._buffer += chunk
+
+            last = None
+            # Extract all complete packets, keep only last
+            while len(self._buffer) >= 4:
+                length = struct.unpack("!I", self._buffer[:4])[0]
+                if len(self._buffer) < 4 + length:
+                    break
+                last = self._buffer[4:4+length]
+                self._buffer = self._buffer[4+length:]
+
+            if last is not None:
+                with self._lock:
+                    self._raw = last
+                # Send 1-byte ACK
+                try:
+                    self.sock.send(b'\x01')
+                except:
+                    pass
+
+    def get_frames(self) -> dict[str, np.ndarray]:
+        """Return the most-recent camera frames (decoded)."""
+        with self._lock:
+            raw = self._raw
+
+        if not raw:
+            return {}
+
+        obs = json.loads(raw.decode("utf-8"))
+        frames = {}
+        for name, b64 in obs.get("images", {}).items():
+            jpg = base64.b64decode(b64)
+            arr = np.frombuffer(jpg, dtype=np.uint8)
+            img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if img is not None:
+                frames[name] = img
+        return frames
+
+    def stop(self):
+        """Stop background thread and close socket."""
+        self._running = False
+        self._thread.join(timeout=1.0)
+        self.sock.close()
+        
+
 class MobileRevobotManipulator:
     # TODO(rcadene): Implement force feedback
     """This class allows to control any manipulator robot of various number of motors.
@@ -75,7 +158,7 @@ class MobileRevobotManipulator:
         self.robot_type = config.type
         self.config = config
         self.remote_ip = config.ip
-        self.remote_port = config.port
+        # self.remote_port = config.port
         self.remote_port_video = config.video_port
         self.calibration_dir = Path(self.config.calibration_dir)
         self.logs = {}
@@ -104,10 +187,11 @@ class MobileRevobotManipulator:
         self.last_frames = {}
 
 
-        # ZeroMQ context and sockets.
-        self.context = None
-        self.cmd_socket = None
-        self.video_socket = None
+        # Init sockets.
+        self.video_receiver: VideoReceiver | None = None
+        self._frame_lock = threading.Lock()
+        self.logs: dict[str, float] = {}
+        self._slow_frame_counter = 0
 
     
     def get_motor_names(self, arm: dict[str, MotorsBus]) -> list:
@@ -229,19 +313,10 @@ class MobileRevobotManipulator:
         for name in self.leader_arms:
             self.leader_arms[name].read("Present_Position")
 
-        # Set up ZeroMQ sockets to communicate with the remote mobile robot.
-        self.context = zmq.Context()
-        self.cmd_socket = self.context.socket(zmq.PUSH)
-        connection_string = f"tcp://{self.remote_ip}:{self.remote_port}"
-        self.cmd_socket.connect(connection_string)
-        self.cmd_socket.setsockopt(zmq.CONFLATE, 1)
-        self.video_socket = self.context.socket(zmq.PULL)
-        video_connection = f"tcp://{self.remote_ip}:{self.remote_port_video}"
-        self.video_socket.connect(video_connection)
-        self.video_socket.setsockopt(zmq.CONFLATE, 1)
-        print(
-            f"[INFO] Connected to video stream at {video_connection}."
-        )
+        self.video_receiver = VideoReceiver(self.remote_ip, self.remote_port_video)
+        
+        print(f"[INFO] Connected to TCP video stream at {self.remote_ip}:{self.remote_port_video}")
+
 
         self.is_connected = True
 
@@ -407,68 +482,12 @@ class MobileRevobotManipulator:
     
 
     def _get_data(self):
-        """
-        Polls the video socket for up to 15 ms. If data arrives, decode only
-        the *latest* message, returning frames from cameras. If nothing arrives,
-        reuse the last known frames.
-        """
-        start_time = time.time()  # --- TIMING ---
-        frames = {}
+        # non‐blocking grab of the latest decoded frames
+        with self._frame_lock:
+            return self.video_receiver.get_frames()
 
-        poll_start = time.time()  # --- TIMING ---
-        poller = zmq.Poller()
-        poller.register(self.video_socket, zmq.POLLIN)
-        socks = dict(poller.poll(15))
-        poll_elapsed = time.time() - poll_start  # --- TIMING ---
-        print(f"[TIME][get_data] Polling took: {poll_elapsed:.4f}s")  # --- TIMING ---
-
-        if self.video_socket not in socks or socks[self.video_socket] != zmq.POLLIN:
-            print(f"[TIME][get_data] No new data. Time: {time.time() - start_time:.4f}s")  # --- TIMING ---
-            return self.last_frames
-
-        last_msg = None
-        drain_start = time.time()  # --- TIMING ---
-        while True:
-            try:
-                obs_string = self.video_socket.recv_string(zmq.NOBLOCK)
-                last_msg = obs_string
-            except zmq.Again:
-                break
-        drain_elapsed = time.time() - drain_start  # --- TIMING ---
-        print(f"[TIME][get_data] Draining ZMQ queue took: {drain_elapsed:.4f}s")  # --- TIMING ---
-
-        if not last_msg:
-            # print(f"[TIME][get_data] No message. Time: {time.time() - start_time:.4f}s")  # --- TIMING ---
-            return self.last_frames
-
-        decode_start = time.time()  # --- TIMING ---
-        try:
-            observation = json.loads(last_msg)
-            images_dict = observation.get("images", {})
-
-            for cam_name, image_b64 in images_dict.items():
-                if image_b64:
-                    jpg_data = base64.b64decode(image_b64)
-                    np_arr = np.frombuffer(jpg_data, dtype=np.uint8)
-                    frame_candidate = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-                    if frame_candidate is not None:
-                        frames[cam_name] = frame_candidate
-
-            if frames:
-                self.last_frames = frames
-            else:
-                frames = self.last_frames
-
-        except Exception as e:
-            print(f"[DEBUG] Error decoding video message: {e}")
-            frames = self.last_frames
-        decode_elapsed = time.time() - decode_start  # --- TIMING ---
-        print(f"[TIME][get_data] Decoding + Frame Update took: {decode_elapsed:.4f}s")  # --- TIMING ---
-
-        print(f"[TIME][get_data] Completed in {time.time() - start_time:.4f}s")  # --- TIMING ---
-        return frames
-
-
+    
+    
     def teleop_step(
         self, record_data=False
     ) -> None | tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
@@ -476,8 +495,7 @@ class MobileRevobotManipulator:
         if not self.is_connected:
             raise RobotDeviceNotConnectedError("ManipulatorRobot is not connected. You need to run `robot.connect()`.")
         
-
-        print("")
+        global counter
         
         leader_pos = {}
         for name in self.leader_arms:
@@ -485,7 +503,8 @@ class MobileRevobotManipulator:
             leader_pos[name] = self.leader_arms[name].read("Present_Position")
             leader_pos[name] = torch.from_numpy(leader_pos[name])
             elapsed = time.time() - before_lread_t  # --- TIMING ---
-            print(f"[TIME][teleop_step] Read leader {name} took: {elapsed:.4f}s")  # --- TIMING ---
+            if print_needed:
+                print(f"[TIME][teleop_step] Read leader {name} took: {elapsed:.4f}s")  # --- TIMING ---
             self.logs[f"read_leader_{name}_pos_dt_s"] = elapsed
 
         follower_goal_pos = {}
@@ -498,15 +517,14 @@ class MobileRevobotManipulator:
             goal_pos = goal_pos.numpy().astype(np.float32)
             self.follower_arms[name].write("Goal_Position", goal_pos)
             elapsed = time.time() - before_fwrite_t  # --- TIMING ---
-            print(f"[TIME][teleop_step] Write follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
+            if print_needed:
+                print(f"[TIME][teleop_step] Write follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
             self.logs[f"write_follower_{name}_goal_pos_dt_s"] = elapsed
 
-        message = {"raw_velocity": None, "arm_positions": None}
-        send_data_time = time.time()
-        self.cmd_socket.send_string(json.dumps(message))
-        print(f"[ZQM][teleop_step] Sent none json in {time.time() - send_data_time:.4f}s")        
+      
         if not record_data:
-            print(f"[TIME][teleop_step] Completed in not record {time.time() - step_start:.4f}s")  # --- TIMING ---
+            if print_needed:
+                print(f"[TIME][teleop_step] Completed in {time.time() - step_start:.4f}s")  # --- TIMING ---
             return
 
         obs_dict = self.capture_observation()
@@ -517,9 +535,13 @@ class MobileRevobotManipulator:
                 action.append(follower_goal_pos[name])
         action = torch.cat(action)
 
-        action_dict =  {}
         action_dict = {"action": action}
-        print(f"[TIME][teleop_step] Completed in {time.time() - step_start:.4f}s")  # --- TIMING ---
+        if time.time() - step_start > 0.033:
+            counter += 1
+
+        if print_needed:
+            print(f"[TIME][teleop_step] Completed in {time.time() - step_start:.4f}s")  # --- TIMING ---
+            print(counter)
 
         return obs_dict, action_dict
 
@@ -538,7 +560,8 @@ class MobileRevobotManipulator:
             follower_pos[name] = self.follower_arms[name].read("Present_Position")
             follower_pos[name] = torch.from_numpy(follower_pos[name])
             elapsed = time.time() - before_fread_t  # --- TIMING ---
-            print(f"[TIME][capture_observation] Read follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
+            if print_needed:
+                print(f"[TIME][capture_observation] Read follower {name} took: {elapsed:.4f}s")  # --- TIMING ---
             self.logs[f"read_follower_{name}_pos_dt_s"] = elapsed
 
         state = []
@@ -547,25 +570,25 @@ class MobileRevobotManipulator:
                 state.append(follower_pos[name])
         state = torch.cat(state)
 
-        obs_dict = {}
         obs_dict = {"observation.state": state}
 
         for cam_name, cam in self.cameras.items():
-            cam_start = time.time()  # --- TIMING ---
+            # cam_start = time.time()  # --- TIMING ---
             frame = frames.get(cam_name, None)
             if frame is None:
                 frame = np.zeros((cam.height, cam.width, cam.channels), dtype=np.uint8)
             obs_dict[f"observation.images.{cam_name}"] = torch.from_numpy(frame)
-            cam_elapsed = time.time() - cam_start  # --- TIMING ---
-            print(f"[TIME][capture_observation] Processed camera {cam_name} in {cam_elapsed:.4f}s")  # --- TIMING ---
+            # cam_elapsed = time.time() - cam_start  # --- TIMING ---
+            # print(f"[TIME][capture_observation] Processed camera {cam_name} in {cam_elapsed:.4f}s")  # --- TIMING ---
 
-        print(f"[TIME][capture_observation] Completed in {time.time() - obs_start:.4f}s")  # --- TIMING ---
+        if print_needed:
+            print(f"[TIME][capture_observation] Completed in {time.time() - obs_start:.4f}s")  # --- TIMING ---
 
         return obs_dict
 
 
     def send_action(self, action: torch.Tensor) -> torch.Tensor:
-        send_start = time.time()  # --- TIMING ---
+        # send_start = time.time()  # --- TIMING ---
         if not self.is_connected:
             raise RobotDeviceNotConnectedError("ManipulatorRobot is not connected. You need to run `robot.connect()`.")
 
@@ -573,7 +596,7 @@ class MobileRevobotManipulator:
         to_idx = 0
         action_sent = []
         for name in self.follower_arms:
-            follower_start = time.time()  # --- TIMING ---
+            # follower_start = time.time()  # --- TIMING ---
             to_idx += len(self.follower_arms[name].motor_names)
             goal_pos = action[from_idx:to_idx]
             from_idx = to_idx
@@ -586,10 +609,10 @@ class MobileRevobotManipulator:
             action_sent.append(goal_pos)
             goal_pos = goal_pos.numpy().astype(np.float32)
             self.follower_arms[name].write("Goal_Position", goal_pos)
-            elapsed = time.time() - follower_start  # --- TIMING ---
-            print(f"[TIME][send_action] Sent goal to {name} in {elapsed:.4f}s")  # --- TIMING ---
+            # elapsed = time.time() - follower_start  # --- TIMING ---
+            # print(f"[TIME][send_action] Sent goal to {name} in {elapsed:.4f}s")  # --- TIMING ---
 
-        print(f"[TIME][send_action] Completed in {time.time() - send_start:.4f}s")  # --- TIMING ---
+        # print(f"[TIME][send_action] Completed in {time.time() - send_start:.4f}s")  # --- TIMING ---
 
         return torch.cat(action_sent)
 
@@ -618,13 +641,13 @@ class MobileRevobotManipulator:
         for name in self.leader_arms:
             self.leader_arms[name].disconnect()
         
-
-        if self.cmd_socket:
-            self.cmd_socket.close()
-        if self.video_socket:
-            self.video_socket.close()
-        if self.context:
-            self.context.term()
+        
+        # if self.video_socket:
+        #     self.video_socket.close()
+        if self.video_receiver:
+            self.video_receiver.stop()
+            self.video_receiver = None
+        
         self.is_connected = False
         print("[INFO] Disconnected from remote robot.")
 

@@ -19,9 +19,8 @@ from lerobot.common.robot_devices.motors.configs import RevobotMotorsBusConfig
 from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError, RobotDeviceNotConnectedError
 from lerobot.common.utils.utils import capture_timestamp_utc
 
-write_call_counter = 0
-pause_gripper_angle = 32
-freeze_flag = 0
+prev_string = None
+print_needed = False
 
 RobotData = namedtuple("RobotData", [
     "position",
@@ -155,73 +154,86 @@ class RevobotMotorsBus:
             print("Socket not valid")
             return -1
     
-        maxRetries = 1
-        bytesWritten = 0
-        recvBytes = 0
+        max_retries = 5
+        attempts = 0
+        bytes_written = 0
+        recv_bytes = 0
+        recv_data = b''
     
-        while recvBytes == 0 and maxRetries > 0:
+        # Send command (only once unless error)
+        while attempts < max_retries:
+            attempts += 1
+    
             try:
                 self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
             except Exception:
-                self.connect()  # Call connect without checking for boolean return
-                print("Attempting to reconnect...")
+                print("Socket error, attempting to reconnect...")
+                self.connect()
     
             try:
                 t_sbt = time.time()
-                bytesWritten = self.sock.send(command.encode('utf-8'))
-                print(f"{command} snt in {time.time() - t_sbt:.4f}s")
-                # print("Sending command:", command)
+                bytes_written = self.sock.send(command.encode('utf-8'))
+                if print_needed:
+                    print(f"{command} sent in {time.time() - t_sbt:.4f}s")
             except Exception as e:
-                print("send_command error:", e)
-                self.reconnect()  # Try reconnecting instead of disconnecting
-                maxRetries -= 1
-                continue  # Retry sending command after reconnecting
-            
-            if command == "xxx xxx xxx xxx g;":
+                print("Send error:", e)
+                self.reconnect()
+                continue  # Retry sending
+    
+            break  # Successful send, exit send loop
+    
+        # Only receive if command == F;
+        if "S" in command:
+            attempts = 0  # Reset retry counter for recv
+            while attempts < max_retries:
+                attempts += 1
                 try:
                     t_rcv = time.time()
-                    recv_data = self.sock.recv(1024)
-                    recvBytes = len(recv_data)
-                    print(f"{command} rcv in {time.time() - t_rcv:.4f}s")
-                except Exception:
-                    pass
-        
-                if recvBytes == 0:  # If no data received, attempt reconnect
-                    # print("No data received, attempting to reconnect...")
-                    self.reconnect()
+                    recv_data = self.sock.recv(240)
+                    recv_bytes = len(recv_data)
+                    if print_needed:
+                        print(f"{command} received in {time.time() - t_rcv:.4f}s")
+                    if recv_bytes > 0:
+                        break  # Success
+                except Exception as e:
+                    print("Receive error:", e)
     
-            maxRetries -= 1
-            
-        if command == "xxx xxx xxx xxx g;":
-            if recvBytes == 0:
+                print("No data received, retrying recv...")
+                self.reconnect()
+    
+            if recv_bytes == 0:
                 print("Failed to receive data after multiple attempts.")
                 return -1
-                
+    
+            prc_t = time.time()
             self.robotDataList = self.parse_partial_robot_data_and_ignore_first(recv_data)
-            
+    
             self.joint67Status = Joint67Status(
-                j6Position = self.robotDataList[3].joint67Data,
-                j6Torque   = self.robotDataList[4].joint67Data,
-                j7Position = self.robotDataList[1].joint67Data,
-                j7Torque   = self.robotDataList[2].joint67Data
+                j6Position=self.robotDataList[3].joint67Data,
+                j6Torque=self.robotDataList[4].joint67Data,
+                j7Position=self.robotDataList[1].joint67Data,
+                j7Torque=self.robotDataList[2].joint67Data
             )
-            
-            # print(self.robotDataList)
-            # print("Updated joint67Status:", self.joint67Status)
-        print(f"{command} complete in {time.time() - start:.4f}s")
-        return bytesWritten
+    
+            if print_needed:
+                print(f"[Process] processed robot data in {time.time() - prc_t:.4f}s")
+        
+        if print_needed:
+            print(f"{command} complete in {time.time() - start:.4f}s")
+        return bytes_written
 
 
 
-    def read(self, data_name = "g", motor_names=None):
+
+    def read(self, data_name = "F", motor_names=None):
         # Update joint positions by sending the "get" command.
         if self.sock is None:
             print("Socket not connected; cannot read data.")
             return None
         
-        n = self.send_command("xxx xxx xxx xxx g;")
-        if n < 0:
-            return None
+        # n = self.send_command("xxx xxx xxx xxx F;")
+        # if n < 0:
+        #     return None
         
         positions = []
         # For joints 1-5, we use playbackPosition from robotDataList.
@@ -256,13 +268,12 @@ class RevobotMotorsBus:
             return int((116 - int(value)) * 71.1111)
         elif index == 6:  # 7th position (0-based index)
             # return int(value * 700)  #Super Gripper
-            return int(1350 + value * 17.778)
+            return int(1250 + value * 17.778)
         else:
             return int(value * 3600)
 
     def write(self, data_name:str, values=[], motor_names=None):
-        global write_call_counter, pause_gripper_angle
-        write_call_counter += 1
+        global freeze_flag, prev_string
         
         values_list = np.array(values).tolist()
         # print(values_list)
@@ -274,21 +285,14 @@ class RevobotMotorsBus:
             computed = self.revobot_robot_offset(i, value)
             
             # Skip the programming the Gripper Motor1 as we will use FPGA command to Exevute it
-            if i < 6:
+            if i < 7:
                 command_parts.append(str(computed))
                 
             # This is where we get the offset value of the Gripper 1 Motor
             # We use the offset value of Gripper1 value to program the Gripper2 Value
             # Motor 6 is the Gripper-1 Motor
             
-            if i == 6:
-                
-                # We need to freeze motors 1-5 during training because
-                # during gripping, human jitters are transferred to the robot motors
-                freeze_flag = 0
-                if ((value < 30) & (value > -5)):
-                    freeze_flag = 1
-                    
+            if i == 6:            
                 # This is Gripper-1 steps in little endian. Notice 
                 # that we already have offset value for this gripper
                 byte_data = (computed).to_bytes(2, 'little')
@@ -298,7 +302,7 @@ class RevobotMotorsBus:
                 # This is Gripper-2 steps in little endian. We need to calculate the 
                 # offset value of this gripper based on the Gripper-1 offset. This is 
                 # because in _offset() function only Motor 1-6 gripper offsets are calculated.
-                computed = 1954 + int((45-value) * 17.778)
+                computed = 2054 + int((45-value) * 17.778)
                 byte_data = (computed).to_bytes(2, 'little')
                 data1 = format(byte_data[0], '02x')
                 data2 = format(byte_data[1], '02x')             
@@ -307,20 +311,30 @@ class RevobotMotorsBus:
                 command2 = "xxx xxx xxx xxx S ServoSetX 4 116 12 %"+str(data1)+"%"+str(data2)+"%00%00;"
                 # Gripper-1 Command
                 command3 = "xxx xxx xxx xxx S ServoSetX 1 116 12 %"+str(data3)+"%"+str(data4)+"%00%00;"
+                command4= "xxx xxx xxx xxx F;"
+                
                 
         command = " ".join(command_parts) + ";"
         # self.send_command(command)
-        # # print(command)
-        if  write_call_counter == 1:
-            self.send_command(command2)
-            self.send_command(command3)
-            if (freeze_flag == 0):
-                self.send_command(command)
-            write_call_counter = 0
-        else:
-            self.read()
-        # time.sleep(0.25)
+        # self.send_command(command2)
+        # return
         
+        # Check if previous command is similar to the new commnd
+        if (prev_string == command):
+            runCmd = 0;
+            if print_needed:
+                print("---")
+        else:
+            runCmd = 1;
+            prev_string = command
+        
+        
+        if (runCmd == 1):
+            #self.send_command(command3)
+            self.send_command(command)
+            self.send_command(command2)
+            #self.send_command(command4)
+
        
     def __del__(self):
         # print("RevobotRobotBus.__del__ called")
