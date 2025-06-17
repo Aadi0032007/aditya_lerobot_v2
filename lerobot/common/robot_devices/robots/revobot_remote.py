@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Mon Jun  9 09:46:00 2025
-Modified with timing logs
+
 @author: aadi
 """
 
@@ -103,7 +103,7 @@ def run_video_stream_sender(client_socket, images_lock, latest_images_dict, stop
 
             if print_needed:
                 print(f"[TIME] Total sender loop: {time.perf_counter() - t_loop:.4f}s\n")
-            time.sleep(max(0.033 - (time.perf_counter() - t_loop), 0))
+            time.sleep(max(0.06 - (time.perf_counter() - t_loop), 0))
 
     finally:
         print("[TCP] Closing client socket.")

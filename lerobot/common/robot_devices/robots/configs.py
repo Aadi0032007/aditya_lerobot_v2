@@ -906,12 +906,6 @@ class MobileRevobotRobotConfig(RobotConfig):
                 width=640,
                 height=480,
             ),
-            "stereo": OpenCVCameraConfig(
-                camera_index=4,
-                fps=15,
-                width=1280,
-                height=480,
-            ),
             "wrist_1": OpenCVCameraConfig(
                 camera_index=0,
                 fps=30,
@@ -919,7 +913,7 @@ class MobileRevobotRobotConfig(RobotConfig):
                 height=480,
             ),
             "wrist_2": OpenCVCameraConfig(
-                camera_index=12,
+                camera_index=4,
                 fps=30,
                 width=640,
                 height=480,
