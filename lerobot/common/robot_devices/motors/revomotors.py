@@ -183,7 +183,7 @@ class RevobotMotorsBus:
             break  # Successful send, exit send loop
     
         # Only receive if command == F;
-        if "S" in command:
+        if "P" in command:
             attempts = 0  # Reset retry counter for recv
             while attempts < max_retries:
                 attempts += 1
