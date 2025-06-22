@@ -20,6 +20,7 @@ from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError,
 from lerobot.common.utils.utils import capture_timestamp_utc
 
 prev_string = None
+prev_string2 = None
 print_needed = False
 
 RobotData = namedtuple("RobotData", [
@@ -91,6 +92,8 @@ class RevobotMotorsBus:
     def create_socket(self):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setblocking(True)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self.sock = sock
             return sock
         except socket.error as err:
@@ -273,7 +276,7 @@ class RevobotMotorsBus:
             return int(value * 3600)
 
     def write(self, data_name:str, values=[], motor_names=None):
-        global freeze_flag, prev_string
+        global freeze_flag, prev_string, prev_string2
         
         values_list = np.array(values).tolist()
         # print(values_list)
@@ -327,13 +330,23 @@ class RevobotMotorsBus:
         else:
             runCmd = 1;
             prev_string = command
-        
+            
+        # Check if Gripper-2 command is similar to the new commnd
+        if (prev_string2 == command2):
+            runCmd2 = 0;
+            if print_needed:
+                print("---")
+        else:
+            runCmd2 = 1;
+            prev_string2 = command2
         
         if (runCmd == 1):
-            #self.send_command(command3)
             self.send_command(command)
+            
+        if (runCmd2 == 1):
             self.send_command(command2)
-            #self.send_command(command4)
+            
+        #self.send_command(command4)
 
        
     def __del__(self):
