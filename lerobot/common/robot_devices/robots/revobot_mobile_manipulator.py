@@ -31,7 +31,7 @@ from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError,
 
 
 counter = 0
-print_needed = False
+print_needed = True
 
 PYNPUT_AVAILABLE = True
 try:
@@ -293,8 +293,8 @@ class MobileRevobotManipulator:
             self.set_so100_robot_preset()
 
         # Enable torque on follower arms if present
-        for name in self.follower_arms:
-            if self.use_revobot_follower == False:
+        if self.use_revobot_follower == False:
+            for name in self.follower_arms:
                 print(f"Activating torque on {name} follower arm.")
                 self.follower_arms[name].write("Torque_Enable", 1)
 
@@ -303,9 +303,11 @@ class MobileRevobotManipulator:
                 raise NotImplementedError(
                     f"{self.leader_robot_type} does not support position AND current control in the handle, which is required to set the gripper open."
                 )
-            for name in self.leader_arms:
-                self.leader_arms[name].write("Torque_Enable", 1, "gripper")
-                self.leader_arms[name].write("Goal_Position", self.config.gripper_open_degree, "gripper")
+                
+            if self.use_revobot_leader == False:
+                for name in self.leader_arms:
+                    self.leader_arms[name].write("Torque_Enable", 1, "gripper")
+                    self.leader_arms[name].write("Goal_Position", self.config.gripper_open_degree, "gripper")
 
         # Read initial positions from arms if they are present
         for name in self.follower_arms:
