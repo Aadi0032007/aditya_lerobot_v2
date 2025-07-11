@@ -340,11 +340,13 @@ class RevobotMotorsBus:
             runCmd2 = 1;
             prev_string2 = command2
         
-        if (runCmd == 1):
-            self.send_command(command)
-            
+           
         if (runCmd2 == 1):
             self.send_command(command2)
+            time.sleep(0.005)
+            
+        if (runCmd == 1):
+            self.send_command(command)
             
         #self.send_command(command4)
 

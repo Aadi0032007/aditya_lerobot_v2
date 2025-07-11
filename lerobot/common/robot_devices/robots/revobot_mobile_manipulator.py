@@ -538,7 +538,7 @@ class MobileRevobotManipulator:
         action = torch.cat(action)
 
         action_dict = {"action": action}
-        if time.time() - step_start > 0.033:
+        if time.time() - step_start > 0.066:
             counter += 1
 
         if print_needed:
