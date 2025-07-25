@@ -54,3 +54,11 @@ class RevobotMotorsBusConfig(MotorsBusConfig):
     socket_port: int
     motors: dict[str, tuple[int, str]]
     mock: bool = False
+    
+@MotorsBusConfig.register_subclass("remote_dynamixel")
+@dataclass
+class RemoteDynamixelMotorsBusConfig(MotorsBusConfig):
+    socket_ip: str
+    socket_port: int
+    motors: dict[str, tuple[int, str]]
+    mock: bool = False

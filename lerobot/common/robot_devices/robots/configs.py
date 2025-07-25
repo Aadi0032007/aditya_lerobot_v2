@@ -19,6 +19,7 @@ from lerobot.common.robot_devices.cameras.configs import (
 from lerobot.common.robot_devices.motors.configs import (
     DynamixelMotorsBusConfig,
     FeetechMotorsBusConfig,
+    RemoteDynamixelMotorsBusConfig,
     RevobotMotorsBusConfig,
     MotorsBusConfig,
 )
@@ -851,7 +852,7 @@ class MobileRevobotRobotConfig(RobotConfig):
     max_relative_target: int | None = None
 
     # Network Configuration
-    ip: str = "192.168.0.51"
+    ip: str = "100.85.191.45"
     port: int = 5555
     video_port: int = 5556
 
@@ -861,25 +862,49 @@ class MobileRevobotRobotConfig(RobotConfig):
     
     use_revobot_leader: bool = False
     use_revobot_follower: bool = True
+    use_custom_leader: bool = True #if true it uses ip
     leader_robot_type: str = 'koch' 
     calibration_dir: str = f".cache/calibration/{leader_robot_type}"
-
-    leader_arms: dict[str, MotorsBusConfig] = field(
-        default_factory=lambda: {
-            "main": DynamixelMotorsBusConfig(
-                port="/dev/ttyACM0",
-                motors={
-                    # name: (index, model)
-                    "shoulder_pan": [1, "xl330-m077"],
-                    "shoulder_lift": [2, "xl330-m077"],
-                    "elbow_flex": [3, "xl330-m077"],
-                    "wrist_flex": [4, "xl330-m077"],
-                    "wrist_roll": [5, "xl330-m077"],
-                    "gripper": [6, "xl330-m077"],
-                },
-            ),
-        }
-    )
+    
+    # if remote koch leader is used
+    if use_custom_leader:
+        leader_arms: dict[str, MotorsBusConfig] = field(
+            default_factory=lambda: {
+                "main": RemoteDynamixelMotorsBusConfig(
+                    socket_ip= "100.110.233.119",
+                    #socket_ip: "97.188.81.36"
+                    socket_port= 50002,
+                    motors={
+                        # name: (index, model)
+                        "shoulder_pan": [1, "xl330-m077"],
+                        "shoulder_lift": [2, "xl330-m077"],
+                        "elbow_flex": [3, "xl330-m077"],
+                        "wrist_flex": [4, "xl330-m077"],
+                        "wrist_roll": [5, "xl330-m077"],
+                        "gripper": [6, "xl330-m077"],
+                    },
+                ),
+            }
+        )
+    
+    # if USB based koch is used
+    else:
+        leader_arms: dict[str, MotorsBusConfig] = field(
+            default_factory=lambda: {
+                "main": DynamixelMotorsBusConfig(
+                    port="/dev/ttyACM0",
+                    motors={
+                        # name: (index, model)
+                        "shoulder_pan": [1, "xl330-m077"],
+                        "shoulder_lift": [2, "xl330-m077"],
+                        "elbow_flex": [3, "xl330-m077"],
+                        "wrist_flex": [4, "xl330-m077"],
+                        "wrist_roll": [5, "xl330-m077"],
+                        "gripper": [6, "xl330-m077"],
+                    },
+                ),
+            }
+        )
 
     follower_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {

@@ -169,6 +169,7 @@ class MobileRevobotManipulator:
         # === Extra Revobot config initialization ===
         self.use_revobot_leader = self.config.use_revobot_leader
         self.use_revobot_follower = self.config.use_revobot_follower
+        self.use_custom_leader = self.config.use_custom_leader
         
         if self.use_revobot_leader:
             self.leader_arms = make_motors_buses_from_configs(self.config.revobot_leader_arms)
@@ -279,7 +280,7 @@ class MobileRevobotManipulator:
             if self.use_revobot_follower == False:
                 self.follower_arms[name].write("Torque_Enable", TorqueMode.DISABLED.value)
         for name in self.leader_arms:
-            if self.use_revobot_leader == False:
+            if self.use_revobot_leader == False and self.use_custom_leader == False:
                 self.leader_arms[name].write("Torque_Enable", TorqueMode.DISABLED.value)
 
         self.activate_calibration()
@@ -304,7 +305,7 @@ class MobileRevobotManipulator:
                     f"{self.leader_robot_type} does not support position AND current control in the handle, which is required to set the gripper open."
                 )
                 
-            if self.use_revobot_leader == False:
+            if self.use_revobot_leader == False and self.use_custom_leader == False:
                 for name in self.leader_arms:
                     self.leader_arms[name].write("Torque_Enable", 1, "gripper")
                     self.leader_arms[name].write("Goal_Position", self.config.gripper_open_degree, "gripper")
@@ -406,7 +407,7 @@ class MobileRevobotManipulator:
 
         
         if self.config.gripper_open_degree is not None:
-            if self.use_revobot_leader == False:
+            if self.use_revobot_leader == False and self.use_custom_leader == False:
                 for name in self.leader_arms:
                     set_operating_mode_(self.leader_arms[name])
     
@@ -634,7 +635,7 @@ class MobileRevobotManipulator:
                 from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
                 self.follower_arms[name].write("Torque_Enable", TorqueMode.DISABLED.value)
         for name in self.leader_arms:
-            if self.use_revobot_leader == False:
+            if self.use_revobot_leader == False and self.use_custom_leader == False:
                 from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
                 self.leader_arms[name].write("Torque_Enable", TorqueMode.DISABLED.value)
 

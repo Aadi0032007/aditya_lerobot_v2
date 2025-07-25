@@ -24,6 +24,7 @@ from lerobot.common.robot_devices.motors.configs import (
     DynamixelMotorsBusConfig,
     FeetechMotorsBusConfig,
     MotorsBusConfig,
+    RemoteDynamixelMotorsBusConfig,
     RevobotMotorsBusConfig,
 )
 
@@ -51,6 +52,11 @@ def make_motors_buses_from_configs(motors_bus_configs: dict[str, MotorsBusConfig
 
             motors_buses[key] = FeetechMotorsBus(cfg)
 
+        elif cfg.type == "remote_dynamixel":
+            from lerobot.common.robot_devices.motors.remote_dynamixel import RemoteDynamixelMotorsBus
+
+            motors_buses[key] = RemoteDynamixelMotorsBus(cfg)
+
         elif cfg.type == "revomotor":
             from lerobot.common.robot_devices.motors.revomotors import RevobotMotorsBus
 
@@ -68,6 +74,7 @@ def make_motors_bus(motor_type: str, **kwargs) -> MotorsBus:
 
         config = DynamixelMotorsBusConfig(**kwargs)
         return DynamixelMotorsBus(config)
+    
 
     elif motor_type == "feetech":
         from lerobot.common.robot_devices.motors.feetech import FeetechMotorsBus
@@ -75,6 +82,12 @@ def make_motors_bus(motor_type: str, **kwargs) -> MotorsBus:
         config = FeetechMotorsBusConfig(**kwargs)
         return FeetechMotorsBus(config)
 
+    elif motor_type == "remote_dynamixel":
+        from lerobot.common.robot_devices.motors.remote_dynamixel import RemoteDynamixelMotorsBus
+
+        config = RemoteDynamixelMotorsBusConfig(**kwargs)
+        return RemoteDynamixelMotorsBus(config)
+    
     elif motor_type == "revomotor":
         from lerobot.common.robot_devices.motors.revomotors import RevobotMotorsBus
 
