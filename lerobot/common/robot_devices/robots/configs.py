@@ -852,7 +852,7 @@ class MobileRevobotRobotConfig(RobotConfig):
     max_relative_target: int | None = None
 
     # Network Configuration
-    ip: str = "100.85.191.45"
+    ip: str = "100.102.92.32"
     port: int = 5555
     video_port: int = 5556
 
@@ -871,7 +871,7 @@ class MobileRevobotRobotConfig(RobotConfig):
         leader_arms: dict[str, MotorsBusConfig] = field(
             default_factory=lambda: {
                 "main": RemoteDynamixelMotorsBusConfig(
-                    socket_ip= "100.110.233.119",
+                    socket_ip= "127.0.0.1",
                     #socket_ip: "97.188.81.36"
                     socket_port= 50002,
                     motors={
