@@ -925,7 +925,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
                     episode_index=episode_index, image_key=cam_key, frame_index=0
                 ).parent
                 if img_dir.is_dir():
-                    shutil.rmtree(img_dir)
+                    shutil.rmtree(img_dir,ignore_errors=True)
 
         # Reset the buffer
         self.episode_buffer = self.create_episode_buffer()
