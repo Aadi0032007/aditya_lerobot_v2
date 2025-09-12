@@ -862,16 +862,17 @@ class MobileRevobotRobotConfig(RobotConfig):
     
     use_revobot_leader: bool = False
     use_revobot_follower: bool = True
-    use_custom_leader: bool = True #if true it uses ip
+    use_custom_leader: bool = False #if true it uses ip
     leader_robot_type: str = 'koch' 
     calibration_dir: str = f".cache/calibration/{leader_robot_type}"
+    # calibration_dir: str = f".cache/calibration/koch_josh"
     
     # if remote koch leader is used
     if use_custom_leader:
         leader_arms: dict[str, MotorsBusConfig] = field(
             default_factory=lambda: {
                 "main": RemoteDynamixelMotorsBusConfig(
-                    socket_ip= "127.0.0.1",
+                    socket_ip= "100.110.233.119",
                     #socket_ip: "97.188.81.36"
                     socket_port= 50002,
                     motors={
@@ -926,19 +927,26 @@ class MobileRevobotRobotConfig(RobotConfig):
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
             "phone": OpenCVCameraConfig(
-                camera_index=2,
+                camera_index=8,
                 fps=30,
                 width=640,
                 height=480,
             ),
             "wrist_1": OpenCVCameraConfig(
-                camera_index=0,
+                camera_index=10, #10
+                fps=30,
+                width=640,
+                height=480,
+                rotation=180,
+            ),
+            "wrist_2": OpenCVCameraConfig(
+                camera_index=6,
                 fps=30,
                 width=640,
                 height=480,
             ),
-            "wrist_2": OpenCVCameraConfig(
-                camera_index=4,
+            "wrist_3": OpenCVCameraConfig(
+                camera_index=0,
                 fps=30,
                 width=640,
                 height=480,

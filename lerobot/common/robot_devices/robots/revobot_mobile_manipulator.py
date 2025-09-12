@@ -31,7 +31,7 @@ from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError,
 
 
 counter = 0
-print_needed = True
+print_needed = False
 
 PYNPUT_AVAILABLE = True
 try:

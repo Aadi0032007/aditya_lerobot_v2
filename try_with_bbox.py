@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu May 29 11:25:42 2025
+Created on Tue Aug 26 12:08:13 2025
 
 @author: aadi
 """
 
 from lerobot.common.policies.act.modeling_act import ACTPolicy
-from lerobot.common.policies.vqbet.modeling_vqbet import VQBeTPolicy
 from lerobot.common.policies.pi0.modeling_pi0 import PI0Policy
 from lerobot.common.robot_devices.utils import busy_wait
 import time
@@ -42,6 +41,22 @@ from lerobot.common.robot_devices.robots.configs import (
 
 from lerobot.common.robot_devices.robots.revobot_manipulator import RevobotManipulatorRobot
 from lerobot.common.robot_devices.robots.revobot_mobile_manipulator import MobileRevobotManipulator
+
+from lerobot.common.utils.gemini_utils import bbox_2d_gemini, plot_2d_bbox
+import rerun as rr
+
+def _init_rerun(session_name: str = "Aditya_control_loop") -> None:
+    
+        # Configure Rerun flush batch size default to 8KB if not set
+        batch_size = os.getenv("RERUN_FLUSH_NUM_BYTES", "8000")
+        os.environ["RERUN_FLUSH_NUM_BYTES"] = batch_size
+
+        # Initialize Rerun based on configuration
+        rr.init(session_name)
+        
+        memory_limit = os.getenv("LEROBOT_RERUN_MEMORY_LIMIT", "10%")
+        rr.spawn(memory_limit=memory_limit)
+
 
 calibration_dir: str = ".cache/calibration/koch"
 # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
@@ -167,37 +182,57 @@ robot = MobileRevobotManipulator(robot_config)
 
 
 inference_time_s = 80
-fps = 15
+fps = 10
 device = "cuda"  # TODO: On Mac, use "mps" or "cpu"
 
 # ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/test_2_act/checkpoints/100000/pretrained_model"
 # ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/test_3_long_act/checkpoints/last/pretrained_model"
 # ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_1_act/checkpoints/100000/pretrained_model"
-ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_1_2cams_L/checkpoints/last/pretrained_model"
-# ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_bb_2cam_act/checkpoints/last/pretrained_model"
-# ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_1_phone_vqbet_1/checkpoints/last/pretrained_model"
-# ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_1_2cams_act_more/checkpoints/last/pretrained_model"
+# ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_1_2cams_act/checkpoints/100000/pretrained_model"
+# ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_bb_act/checkpoints/last/pretrained_model"
+ckpt_path = "/home/revolabs/aditya/aditya_lerobot_v2/outputs/train/bartender_bb_2cam_act/checkpoints/last/pretrained_model"
 
 
 # policy = ACTPolicy.from_pretrained(ckpt_path)
 policy = ACTPolicy.from_pretrained(ckpt_path)
-# policy = VQBeTPolicy.from_pretrained(ckpt_path)
-
 
 policy.to(device)
 robot.connect()
 
 
+
    
 def inference(robot):
+    
+    start_episode_t = time.perf_counter()
+    while True:
+        observation, _ = robot.teleop_step(record_data=True)  
+        if time.perf_counter() - start_episode_t > 3:
+            break
+    prompt = "Detect the 2d bounding boxes of bottle and steel-glass" 
+    if observation["observation.images.phone"] is not None:
+        bounding_box = bbox_2d_gemini(observation["observation.images.phone"],prompt)
+        print(bounding_box)
+    
     rest_position = [1.0546875, 113.115234, 172.4414, 25.136719, -0.7910156, 35.06836]
     count = 0
-    while True:
+    # _init_rerun()
+    for _ in range(inference_time_s * fps):
         start_time = time.perf_counter()
     
         # Read the follower state and access the frames from the cameras
         observation = robot.capture_observation()
+        image_keys = [key for key in observation if "image" in key]
+        for key in image_keys:
+            if  "observation.images.phone" in key:
+                plot_img = plot_2d_bbox(observation[key], bounding_box)
+                numpy_img = np.array(plot_img)
+                observation[key] = torch.from_numpy(numpy_img)
         
+        # image_keys = [key for key in observation if "image" in key]
+        # for key in image_keys:
+        #     rr.log(key, rr.Image(observation[key].numpy()), static=True)
+    
         # Convert to pytorch format: channel first and float32 in [0,1]
         # with batch dimension
         for name in observation:
@@ -206,7 +241,7 @@ def inference(robot):
                 observation[name] = observation[name].permute(2, 0, 1).contiguous()
             observation[name] = observation[name].unsqueeze(0)
             observation[name] = observation[name].to(device)
-    
+        
         # Compute the next action with the policy
         # based on the current observation
         action = policy.select_action(observation)
@@ -226,7 +261,7 @@ def inference(robot):
 
         count += 1
         
-        if result[1] < 1.5 and count > fps * 10:
+        if result[1] < 5 and count > fps * 3:
             print("reaching home")
             break
         
@@ -259,3 +294,4 @@ finally:
     # go_to_home_position(robot)
     robot.disconnect()
     print("Robot disconnected.")
+

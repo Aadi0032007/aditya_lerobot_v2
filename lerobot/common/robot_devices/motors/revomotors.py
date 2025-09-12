@@ -295,7 +295,7 @@ class RevobotMotorsBus:
             # We use the offset value of Gripper1 value to program the Gripper2 Value
             # Motor 6 is the Gripper-1 Motor
             
-            if i == 6:            
+            if i == 6: 
                 # This is Gripper-1 steps in little endian. Notice 
                 # that we already have offset value for this gripper
                 byte_data = (computed).to_bytes(2, 'little')

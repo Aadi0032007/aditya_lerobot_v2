@@ -1,4 +1,3 @@
-# leader_position_server_binary.py
 # -*- coding: utf-8 -*-
 """
 Created on Fri Jul 25 12:22:11 2025
@@ -69,10 +68,7 @@ def serve_forever():
                 while True:
                     # wait for request
                     request = conn.recv(3)
-                    if not request or request != b"ACK":
-                        print(f"[Leader] unexpected request or connection lost: {request}")
-                        break
-
+                    
                     # respond with latest position
                     with position_lock:
                         if current_position is None:
@@ -83,9 +79,11 @@ def serve_forever():
                 print(f"[Leader] follower {addr} error: {e}")
             finally:
                 conn.close()
+                threading.Thread(target=update_position_loop, args=(leader,), daemon=True).join()
                 leader.write("Torque_Enable", TorqueMode.DISABLED.value)
                 leader.disconnect()
                 print(f"[Leader] follower {addr} disconnected")
+                serve_forever()
 
 if __name__ == "__main__":
     serve_forever()
