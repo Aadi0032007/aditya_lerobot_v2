@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sun Sep 21 07:06:24 2025
+Created on Mon Jun  9 09:46:00 2025
 
 @author: aadi
 """
@@ -11,13 +11,9 @@ import time
 import json
 import base64
 import cv2
-import numpy as np
-from collections import deque
+
 
 print_needed = False
-maxlen=15
-frame_history = deque(maxlen=15)  # stores up to 30 previous frames
-
 
 def start_tcp_server(host: str, port: int) -> socket.socket:
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -45,8 +41,6 @@ def encode_frame(frame) -> str:
 
 def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
     """Capture frames into shared memory at high speed."""
-    start = time.time()
-                
     while not stop_event.is_set():
         t_loop = time.perf_counter()
         local_dict = {}
@@ -54,36 +48,6 @@ def run_camera_capture(cameras, images_lock, latest_images_dict, stop_event):
             t_cam = time.perf_counter()
             frame = cam.async_read()
             t_cam_elapsed = time.perf_counter() - t_cam
-            
-            if name == "phone":
-                frame = cam.async_read()
-                curr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-                curr_int = curr_frame.astype(np.int16)
-                
-                frame_history.append(curr_int)
-                
-                if len(frame_history) >= maxlen:
-                    
-                    prev_frame = frame_history[0]
-                    diff = curr_int - prev_frame
-                    
-                    h, w = diff.shape
-                    vis = np.zeros((h, w, 3), dtype=np.uint8)
-                    
-                    # Positive differences → Blue
-                    vis[:, :, 0] = np.clip(diff, 0, 255).astype(np.uint8)
-    
-                    # Negative differences → Red
-                    vis[:, :, 2] = np.clip(-diff, 0, 255).astype(np.uint8)
-                    
-                    prev_frame = curr_int.copy()
-                    # print("df done")
-                
-            if name == "wrist_3" and len(frame_history) >= maxlen:
-                frame = vis
-                # print("set df to wrist 3")
-            
-                
             if print_needed:
                 print(f"[TIME] Camera read [{name}]: {t_cam_elapsed:.4f}s")
 

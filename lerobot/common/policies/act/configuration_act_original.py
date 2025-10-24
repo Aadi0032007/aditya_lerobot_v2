@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Oct  8 11:44:05 2025
-
-@author: aadi
-"""
 #!/usr/bin/env python
 
 # Copyright 2024 Tony Z. Zhao and The HuggingFace Inc. team. All rights reserved.
@@ -25,10 +19,6 @@ from lerobot.common.optim.optimizers import AdamWConfig
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.types import NormalizationMode
 
-# added 
-from typing import Optional, Tuple
-
-# till here
 
 @PreTrainedConfig.register_subclass("act")
 @dataclass
@@ -102,21 +92,9 @@ class ACTConfig(PreTrainedConfig):
 
     # Input / output structure.
     n_obs_steps: int = 1
-    chunk_size: int = 60 # 45 worked better
-    n_action_steps: int = 45 # 45 worked better
-    
-    # added
-    # Master switch: if True, use direction exactly like state (same dim & normalization),
-    # but it will be computed on-the-fly in modeling_act from observation.state.
-    use_direction: bool = True
-    dir_window: int = True
-    # Direction feature shape (serializable). When use_direction=True, we set this to (state_dim,) in __post_init__.
-    direction_feature: Optional[Tuple[int, ...]] = None
-    
-    # till here
+    chunk_size: int = 100 # 45 worked better
+    n_action_steps: int = 100 # 45 worked better
 
-
-    # TODO: check for direction normalization
     normalization_mapping: dict[str, NormalizationMode] = field(
         default_factory=lambda: {
             "VISUAL": NormalizationMode.MEAN_STD,
@@ -152,7 +130,7 @@ class ACTConfig(PreTrainedConfig):
     temporal_ensemble_coeff: float | None = None
     # Training and loss computation.
     dropout: float = 0.1
-    kl_weight: float = 100.0
+    kl_weight: float = 10.0
 
     # Training preset
     optimizer_lr: float = 1e-5
@@ -160,58 +138,7 @@ class ACTConfig(PreTrainedConfig):
     optimizer_lr_backbone: float = 1e-5
 
     def __post_init__(self):
-        super().__post_init__()        
-        
-        # added
-        # --- Direction wiring: mirror STATE exactly when enabled ---
-        # --- Direction wiring: mirror STATE exactly when enabled ---
-        if self.use_direction:
-            state_dim = 6
-            
-            # TODO: Make it non hard coded
-        
-            # # Try to infer state_dim only if input_features is already filled
-            # if hasattr(self, "input_features") and self.input_features:
-            #     try:
-            #         state_dim = int(self.input_features["observation.state"]["shape"][0])
-            #     except Exception:
-            #         state_dim = None  # not available yet, defer
-        
-            if state_dim is not None:
-                # Set / validate direction_feature shape now
-                if self.direction_feature is None:
-                    self.direction_feature = (state_dim,)
-                elif int(self.direction_feature[0]) != state_dim:
-                    raise ValueError(
-                        f"direction_feature dim ({self.direction_feature[0]}) must equal observation.state dim ({state_dim})."
-                    )
-        
-        #         # Ensure direction is listed as an input exactly like state
-        #         if not hasattr(self, "input_features") or self.input_features is None:
-        #             self.input_features = {}
-        #         self.input_features.setdefault(
-        #             "observation.direction", {"type": "STATE", "shape": [state_dim]}
-        #         )
-        
-        #         if not hasattr(self, "input_shapes") or self.input_shapes is None:
-        #             self.input_shapes = {}
-        #         self.input_shapes.setdefault("observation.direction", [state_dim])
-        
-        #     else:
-        #         # Defer: leave direction_feature unset for now.
-        #         # ACTPolicy will finalize once input_features is available, or from the first batch.
-        #         pass
-    
-        # else:
-        #     # Disabled => don’t advertise the feature
-        #     self.direction_feature = None
-        #     if hasattr(self, "input_features") and self.input_features:
-        #         self.input_features.pop("observation.direction", None)
-        #     if hasattr(self, "input_shapes") and self.input_shapes:
-        #         self.input_shapes.pop("observation.direction", None)
-                
-        # till here
-
+        super().__post_init__()
 
         """Input validation (not exhaustive)."""
         if not self.vision_backbone.startswith("resnet"):

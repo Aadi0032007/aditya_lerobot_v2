@@ -81,12 +81,12 @@ python lerobot/scripts/control_robot.py \
     --control.type=record \
     --control.single_task="Pick up bottle."  \
     --control.fps=15 \
-    --control.repo_id=bartender_1 \
+    --control.repo_id=bartender_df_1 \
     --control.tags='["tutorial"]' \
     --control.warmup_time_s=10 \
     --control.episode_time_s=3600 \
     --control.reset_time_s=0 \
-    --control.num_episodes=20  \
+    --control.num_episodes=30  \
     --control.push_to_hub=false \
     --control.resume=true
 

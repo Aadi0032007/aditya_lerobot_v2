@@ -145,6 +145,7 @@ from lerobot.common.robot_devices.control_configs import (
     ControlPipelineConfig,
     RecordControlConfig,
     RecordWithBboxControlConfig,
+    RecordWithDFControlConfig,
     RemoteRevobotRobotConfig,
     RemoteRobotConfig,
     ReplayControlConfig,
@@ -157,6 +158,7 @@ from lerobot.common.robot_devices.control_utils import (
     log_control_info,
     record_episode,
     record_episode_with_bbox,
+    record_episode_with_df,
     reset_environment,
     sanity_check_dataset_name,
     sanity_check_dataset_robot_compatibility,
@@ -348,6 +350,7 @@ def record(
     log_say("Exiting", cfg.play_sounds)
     return dataset
 
+
 @safe_disconnect
 def record_with_bbox(
     robot: Robot,
@@ -467,6 +470,7 @@ def record_with_bbox(
 
     log_say("Exiting", cfg.play_sounds)
     return dataset
+
 
 
 

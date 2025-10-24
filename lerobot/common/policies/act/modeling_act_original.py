@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Oct  8 11:32:41 2025
-
-@author: aadi
-"""
-
 #!/usr/bin/env python
 
 # Copyright 2024 Tony Z. Zhao and The HuggingFace Inc. team. All rights reserved.
@@ -84,13 +77,6 @@ class ACTPolicy(PreTrainedPolicy):
             self.temporal_ensembler = ACTTemporalEnsembler(config.temporal_ensemble_coeff, config.chunk_size)
 
         self.reset()
-        
-        # added
-        # Direction derivation history (one deque per env slot), used only when use_direction=True
-        self._dir_window = self.config.dir_window
-        self._dir_histories = None  # type: list[deque] | None
-        
-        # till here
 
     def get_optim_params(self) -> dict:
         # TODO(aliberts, rcadene): As of now, lr_backbone == lr
@@ -119,56 +105,7 @@ class ACTPolicy(PreTrainedPolicy):
             self.temporal_ensembler.reset()
         else:
             self._action_queue = deque([], maxlen=self.config.n_action_steps)
-            
-        # added
-        self._dir_histories = None
 
-        # till here
-        
-    # added  
-    @torch.no_grad()
-    def _ensure_direction_in_batch(self, batch: dict[str, Tensor]) -> None:
-        """
-        If use_direction=True, compute batch['observation.direction'] as per-dimension sign in {-1,0,1}
-        from a rolling window over observation.state. Works in both training and inference.
-        Assumes batches are sequential for each row index.
-        """
-        if not self.config.use_direction:
-            return
-        if "observation.direction" in batch:
-            return
-    
-        # If state missing entirely, create safe zeros
-        if "observation.state" not in batch:
-            dev = next((t.device for t in batch.values() if torch.is_tensor(t)), torch.device("cpu"))
-            B  = next((t.shape[0] for t in batch.values() if torch.is_tensor(t)), 1)
-            state_dim = int(self.config.direction_feature[0]) if self.config.direction_feature else 1
-            batch["observation.direction"] = torch.zeros(B, state_dim, dtype=torch.float32, device=dev)
-            return
-    
-        state = batch["observation.state"]              # (B, state_dim)
-        B, state_dim = state.shape
-        dev = state.device
-    
-        # Init/re-init per-row histories if needed or batch size changed
-        if (self._dir_histories is None) or (len(self._dir_histories) != B):
-            from collections import deque
-            self._dir_histories = [deque(maxlen=self._dir_window) for _ in range(B)]
-    
-        out = torch.zeros(B, state_dim, dtype=torch.float32, device=dev)
-        for i in range(B):
-            curr = state[i].detach()        # (state_dim,)
-            hist = self._dir_histories[i]
-            ref  = hist[0] if len(hist) > 0 else curr
-            hist.append(curr)
-            delta = curr - ref              # (state_dim,)
-            out[i] = torch.sign(delta)      # elementwise in {-1, 0, 1}
-    
-        batch["observation.direction"] = out
-
-    
-    # till here
-    
     @torch.no_grad
     def select_action(self, batch: dict[str, Tensor]) -> Tensor:
         """Select a single action given environment observations.
@@ -178,12 +115,6 @@ class ACTPolicy(PreTrainedPolicy):
         queue is empty.
         """
         self.eval()
-        
-        # added
-        # TODO: Is it ok to make training_mode=False?
-        self._ensure_direction_in_batch(batch)
-        
-        # till here
 
         batch = self.normalize_inputs(batch)
         if self.config.image_features:
@@ -213,11 +144,6 @@ class ACTPolicy(PreTrainedPolicy):
 
     def forward(self, batch: dict[str, Tensor]) -> tuple[Tensor, dict]:
         """Run the batch through the model and compute the loss for training or validation."""
-        
-        # added
-        self._ensure_direction_in_batch(batch)
-        # till here
-        
         batch = self.normalize_inputs(batch)
         if self.config.image_features:
             batch = dict(batch)  # shallow copy so that adding a key doesn't modify the original
@@ -387,15 +313,6 @@ class ACT(nn.Module):
                 self.vae_encoder_robot_state_input_proj = nn.Linear(
                     self.config.robot_state_feature.shape[0], config.dim_model
                 )
-                
-            # added
-            # Direction → model dim (only if enabled)
-            if self.config.use_direction and getattr(self.config, "direction_feature", None) is not None:
-                dir_dim = int(self.config.direction_feature[0])
-                self.vae_encoder_direction_input_proj = nn.Linear(dir_dim, config.dim_model)
-            
-            # till here
-                
             # Projection layer for action (joint-space target) to hidden dimension.
             self.vae_encoder_action_input_proj = nn.Linear(
                 self.config.action_feature.shape[0],
@@ -408,14 +325,6 @@ class ACT(nn.Module):
             num_input_token_encoder = 1 + config.chunk_size
             if self.config.robot_state_feature:
                 num_input_token_encoder += 1
-                
-            # added
-            if self.config.use_direction and getattr(self.config, "direction_feature", None) is not None:
-                num_input_token_encoder += 1
-    
-            # till here
-            
-            
             self.register_buffer(
                 "vae_encoder_pos_enc",
                 create_sinusoidal_pos_embedding(num_input_token_encoder, config.dim_model).unsqueeze(0),
@@ -443,14 +352,6 @@ class ACT(nn.Module):
             self.encoder_robot_state_input_proj = nn.Linear(
                 self.config.robot_state_feature.shape[0], config.dim_model
             )
-            
-        # added
-        if self.config.use_direction and getattr(self.config, "direction_feature", None) is not None:
-            dir_dim = int(self.config.direction_feature[0])
-            self.encoder_direction_input_proj = nn.Linear(dir_dim, config.dim_model)
-        
-        # till here            
-            
         if self.config.env_state_feature:
             self.encoder_env_state_input_proj = nn.Linear(
                 self.config.env_state_feature.shape[0], config.dim_model
@@ -466,13 +367,6 @@ class ACT(nn.Module):
             n_1d_tokens += 1
         if self.config.env_state_feature:
             n_1d_tokens += 1
-            
-        # added
-        if self.config.use_direction and getattr(self.config, "direction_feature", None) is not None:
-            n_1d_tokens += 1
-        
-        # till here       
-        
         self.encoder_1d_feature_pos_embed = nn.Embedding(n_1d_tokens, config.dim_model)
         if self.config.image_features:
             self.encoder_cam_feat_pos_embed = ACTSinusoidalPositionEmbedding2d(config.dim_model // 2)
@@ -527,57 +421,32 @@ class ACT(nn.Module):
             cls_embed = einops.repeat(
                 self.vae_encoder_cls_embed.weight, "1 d -> b 1 d", b=batch_size
             )  # (B, 1, D)
-            
-            # added
-            vae_encoder_input_parts = [cls_embed]
-            
-            # till here           
-            
             if self.config.robot_state_feature:
                 robot_state_embed = self.vae_encoder_robot_state_input_proj(batch["observation.state"])
                 robot_state_embed = robot_state_embed.unsqueeze(1)  # (B, 1, D)
-                
-                # added
-                vae_encoder_input_parts.append(robot_state_embed)
-                
-                # till here
-                
-            # added
-            if self.config.use_direction and getattr(self.config, "direction_feature", None) is not None:
-                # (B, state_dim) -> (B, D) -> (B, 1, D)
-                dir_vec   = batch["observation.direction"].to(dtype=torch.float32)
-                dir_embed = self.vae_encoder_direction_input_proj(dir_vec).unsqueeze(1)
-                vae_encoder_input_parts.append(dir_embed)
-                
-            # till here
-
-                
             action_embed = self.vae_encoder_action_input_proj(batch["action"])  # (B, S, D)
 
-            # added 
-            vae_encoder_input_parts.append(action_embed)
-            vae_encoder_input = torch.cat(vae_encoder_input_parts, axis=1)                
-            
-            # till here            
-        
+            if self.config.robot_state_feature:
+                vae_encoder_input = [cls_embed, robot_state_embed, action_embed]  # (B, S+2, D)
+            else:
+                vae_encoder_input = [cls_embed, action_embed]
+            vae_encoder_input = torch.cat(vae_encoder_input, axis=1)
 
             # Prepare fixed positional embedding.
             # Note: detach() shouldn't be necessary but leaving it the same as the original code just in case.
             pos_embed = self.vae_encoder_pos_enc.clone().detach()  # (1, S+2, D)
 
-            # added
-            num_extra_tokens = 1  # cls
-            if self.config.robot_state_feature:
-                num_extra_tokens += 1
-            if self.config.use_direction and getattr(self.config, "direction_feature", None) is not None:
-                num_extra_tokens += 1
-            
-            mask_device = batch["action"].device
-            cls_joint_is_pad = torch.full((batch_size, num_extra_tokens), False, device=mask_device)
-            key_padding_mask = torch.cat([cls_joint_is_pad, batch["action_is_pad"]], axis=1)
-
-            # till here
-
+            # Prepare key padding mask for the transformer encoder. We have 1 or 2 extra tokens at the start of the
+            # sequence depending whether we use the input states or not (cls and robot state)
+            # False means not a padding token.
+            cls_joint_is_pad = torch.full(
+                (batch_size, 2 if self.config.robot_state_feature else 1),
+                False,
+                device=batch["observation.state"].device,
+            )
+            key_padding_mask = torch.cat(
+                [cls_joint_is_pad, batch["action_is_pad"]], axis=1
+            )  # (bs, seq+1 or 2)
 
             # Forward pass through VAE encoder to get the latent PDF parameters.
             cls_token_out = self.vae_encoder(
@@ -611,13 +480,6 @@ class ACT(nn.Module):
             encoder_in_tokens.append(
                 self.encoder_env_state_input_proj(batch["observation.environment_state"])
             )
-             
-        # added
-        if self.config.use_direction and getattr(self.config, "direction_feature", None) is not None:
-            encoder_in_tokens.append(
-                self.encoder_direction_input_proj(batch["observation.direction"].to(dtype=torch.float32))
-            )
-        # till here
 
         # Camera observation features and positional embeddings.
         if self.config.image_features:

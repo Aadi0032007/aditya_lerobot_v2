@@ -32,6 +32,7 @@ from lerobot.common.utils.utils import get_safe_torch_device, has_method
 
 from lerobot.common.utils.gemini_utils import plot_2d_bbox
 import numpy as np
+import cv2
 
 def log_control_info(robot: Robot, dt_s, episode_index=None, frame_index=None, fps=None):
     # log_items = []
@@ -229,6 +230,8 @@ def record_episode_with_bbox(
         bounding_box = bounding_box,
     )
     
+
+    
 @safe_stop_image_writer
 def control_loop(
     robot,
@@ -424,6 +427,7 @@ def stop_recording(robot, listener, display_data):
     if not is_headless() and listener is not None:
         listener.stop()
 
+# TODO: Recheck the use of below 2 functions
 
 def sanity_check_dataset_name(repo_id, policy_cfg):
     # _, dataset_name = repo_id.split("/")
