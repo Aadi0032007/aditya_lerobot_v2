@@ -30,7 +30,6 @@ from lerobot.common.robot_devices.robots.utils import Robot
 from lerobot.common.robot_devices.utils import busy_wait
 from lerobot.common.utils.utils import get_safe_torch_device, has_method
 
-from lerobot.common.utils.gemini_utils import plot_2d_bbox
 import numpy as np
 import cv2
 
@@ -206,31 +205,6 @@ def record_episode(
         single_task=single_task,
     )
 
-def record_episode_with_bbox(
-    robot,
-    dataset,
-    events,
-    episode_time_s,
-    display_data,
-    policy,
-    fps,
-    single_task,
-    bounding_box,
-):
-    control_loop_with_bbox(
-        robot=robot,
-        control_time_s=episode_time_s,
-        display_data=display_data,
-        dataset=dataset,
-        events=events,
-        policy=policy,
-        fps=fps,
-        teleoperate=policy is None,
-        single_task=single_task,
-        bounding_box = bounding_box,
-    )
-    
-
     
 @safe_stop_image_writer
 def control_loop(
@@ -315,96 +289,6 @@ def control_loop(
             events["exit_early"] = False
             break
 
-@safe_stop_image_writer
-def control_loop_with_bbox(
-    robot,
-    control_time_s=None,
-    teleoperate=False,
-    display_data=False,
-    dataset: LeRobotDataset | None = None,
-    events=None,
-    policy: PreTrainedPolicy = None,
-    fps: int | None = None,
-    single_task: str | None = None,
-    bounding_box=None,
-):
-    # TODO(rcadene): Add option to record logs
-    if not robot.is_connected:
-        robot.connect()
-
-    if events is None:
-        events = {"exit_early": False}
-
-    if control_time_s is None:
-        control_time_s = float("inf")
-
-    if teleoperate and policy is not None:
-        raise ValueError("When `teleoperate` is True, `policy` should be None.")
-
-    if dataset is not None and single_task is None:
-        raise ValueError("You need to provide a task as argument in `single_task`.")
-
-    if dataset is not None and fps is not None and dataset.fps != fps:
-        raise ValueError(f"The dataset fps should be equal to requested fps ({dataset['fps']} != {fps}).")
-
-    timestamp = 0
-    start_episode_t = time.perf_counter()
-    
-
-    # Controls starts, if policy is given it needs cleaning up
-    if policy is not None:
-        policy.reset()
-
-    while timestamp < control_time_s:
-        start_loop_t = time.perf_counter()
-
-        if teleoperate:
-            observation, action = robot.teleop_step(record_data=True)
-            image_keys = [key for key in observation if "image" in key]
-            for key in image_keys:
-                if  "observation.images.phone" in key:
-                    plot_img = plot_2d_bbox(observation[key], bounding_box)
-                    numpy_img = np.array(plot_img)
-                    observation[key] = torch.from_numpy(numpy_img)
-        else:
-            observation = robot.capture_observation()
-            action = None
-
-            if policy is not None:
-                pred_action = predict_action(
-                    observation, policy, get_safe_torch_device(policy.config.device), policy.config.use_amp
-                )
-                # Action can eventually be clipped using `max_relative_target`,
-                # so action actually sent is saved in the dataset.
-                action = robot.send_action(pred_action)
-                action = {"action": action}
-
-        if dataset is not None:
-            frame = {**observation, **action, "task": single_task}
-            dataset.add_frame(frame)
-
-        # TODO(Steven): This should be more general (for RemoteRobot instead of checking the name, but anyways it will change soon)
-        if (display_data and not is_headless()) or (display_data and robot.robot_type.startswith("lekiwi")):
-            if action is not None:
-                for k, v in action.items():
-                    for i, vv in enumerate(v):
-                        rr.log(f"sent_{k}_{i}", rr.Scalars(vv.numpy()))
-
-            image_keys = [key for key in observation if "image" in key]
-            for key in image_keys:
-                rr.log(key, rr.Image(observation[key].numpy()), static=True)
-
-        if fps is not None:
-            dt_s = time.perf_counter() - start_loop_t
-            busy_wait(1 / fps - dt_s)
-
-        dt_s = time.perf_counter() - start_loop_t
-        log_control_info(robot, dt_s, fps=fps)
-
-        timestamp = time.perf_counter() - start_episode_t
-        if events["exit_early"]:
-            events["exit_early"] = False
-            break
 
 
 def reset_environment(robot, events, reset_time_s, fps):
