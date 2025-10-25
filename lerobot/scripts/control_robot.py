@@ -166,8 +166,6 @@ from lerobot.common.robot_devices.utils import busy_wait, safe_disconnect
 from lerobot.common.utils.utils import has_method, init_logging, log_say
 from lerobot.configs import parser
 
-from lerobot.common.utils.gemini_utils import bbox_2d_gemini
-
 ########################################################################################
 # Control modes
 ########################################################################################
