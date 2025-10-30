@@ -562,13 +562,14 @@ class RemoteDynamixelMotorsBus:
             buf += chunk
     
         # unpack network-order int32s
-        vals = struct.unpack(f"!{count}i", buf)
+        vals = struct.unpack(f"!{count}f", buf)
         vals = list(vals)
+        # print("vals = ", vals) 
     
-        values = np.array(vals, dtype=np.int32)
+        values = np.array(vals)
+        # print("values = ", values)
     
-        # if self.calibration:
-        #     values = self.apply_calibration_autocorrect(values, motor_names)
+     
     
         return values
 
