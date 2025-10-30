@@ -14,8 +14,35 @@ from lerobot.common.robot_devices.motors.configs import DynamixelMotorsBusConfig
 from lerobot.common.robot_devices.motors.dynamixel import DynamixelMotorsBus
 from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
 
+from lerobot.common.robot_devices.robots.utils import get_arm_id
+import json
+
 current_position = None
 position_lock = threading.Lock()
+
+
+
+def activate_calibration(leader_arms, calibration_dir):
+    """After calibration all motors function in human interpretable ranges.
+    Rotations are expressed in degrees in nominal range of [-180, 180],
+    and linear motions (like gripper of Aloha) in nominal range of [0, 100].
+    """
+
+    def load_or_run_calibration_(name, arm, arm_type):
+        arm_id = get_arm_id(name, arm_type)
+        arm_calib_path = calibration_dir / f"{arm_id}.json"
+
+        if arm_calib_path.exists():
+            with open(arm_calib_path) as f:
+                calibration = json.load(f)
+        else:
+            print("No calibration file, please complete calibration first")
+
+        return calibration
+
+    for name, arm in leader_arms.items():
+        calibration = load_or_run_calibration_(name, arm, "leader")
+        arm.set_calibration(calibration)
 
 def update_position_loop(leader: DynamixelMotorsBus):
     global current_position
@@ -33,6 +60,7 @@ def serve_forever():
     global current_position
 
     # 1) Set up the Dynamixel “leader”
+    calibration_dir: str = ".cache/calibration/koch"
     leader_config = DynamixelMotorsBusConfig(
         port="/dev/ttyACM0",
         motors={
@@ -45,8 +73,10 @@ def serve_forever():
         },
     )
     leader = DynamixelMotorsBus(leader_config)
+    activate_calibration(leader, calibration_dir)
     leader.connect()
-    leader.write("Torque_Enable", 1, "gripper")     
+    leader.write("Torque_Enable", 1, "gripper")
+     
 
     # 2) Start background thread to keep updating `current_position`
     threading.Thread(target=update_position_loop, args=(leader,), daemon=True).start()

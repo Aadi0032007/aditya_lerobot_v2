@@ -64,7 +64,7 @@ python lerobot/scripts/train.py \
 python lerobot/scripts/control_robot.py \
     --robot.type=mobile_revobot \
     --control.type=remote_revobot  \
-    --control.viewer_ip=192.168.0.96  \
+    --control.viewer_ip=100.96.60.43  \
     --control.viewer_port=1234
 
 ----------remote teleoperation-----------

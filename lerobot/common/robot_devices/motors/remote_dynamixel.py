@@ -567,14 +567,14 @@ class RemoteDynamixelMotorsBus:
     
         values = np.array(vals, dtype=np.int32)
     
-        if self.calibration:
-            values = self.apply_calibration_autocorrect(values, motor_names)
+        # if self.calibration:
+        #     values = self.apply_calibration_autocorrect(values, motor_names)
     
         return values
 
    
     def write(self, data_name, values: int | float | np.ndarray, motor_names: str | list[str] | None = None):
-        pass
+        pass # because there's no leader connected to write
 
     
 
