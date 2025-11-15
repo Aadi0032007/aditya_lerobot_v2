@@ -101,7 +101,7 @@
 
 Download our source code:
 ```bash
-git clone https://github.com/huggingface/lerobot.git
+git clone https://github.com/Aadi0032007/aditya_lerobot_v2.git
 cd lerobot
 ```
 
