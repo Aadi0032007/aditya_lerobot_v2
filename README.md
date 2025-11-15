@@ -102,13 +102,13 @@
 Download our source code:
 ```bash
 git clone https://github.com/Aadi0032007/aditya_lerobot_v2.git
-cd lerobot
+cd aditya_lerobot_v2
 ```
 
 Create a virtual environment with Python 3.10 and activate it, e.g. with [`miniconda`](https://docs.anaconda.com/free/miniconda/index.html):
 ```bash
-conda create -y -n lerobot python=3.10
-conda activate lerobot
+conda create -y -n aditya python=3.10
+conda activate aditya
 ```
 
 When using `miniconda`, install `ffmpeg` in your environment:
